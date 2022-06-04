@@ -15,8 +15,9 @@ TARGET			:= BiscuitOS_app
 endif
 
 ## Source Code
-SRC			:= $(wildcard $(PWD)/src/*.c)
+SRC			+= $(wildcard $(PWD)/broiler/*.c)
 SRC			+= main.c
+SRC			+= $(PWD)/bios/bios.c
 
 ## CFlags
 LCFLAGS			+= -DCONFIG_BISCUITOS_APP
@@ -24,6 +25,17 @@ LCFLAGS			+= -DCONFIG_BISCUITOS_APP
 LCFLAGS			+= -I./ -I$(PWD)/include
 
 DOT			:= -
+
+#
+# BIOS assembly weirdness
+#
+BIOS_CFLAGS += -m32
+BIOS_CFLAGS += -march=i386
+BIOS_CFLAGS += -mregparm=3
+
+BIOS_CFLAGS += -fno-stack-protector
+BIOS_CFLAGS += -fno-pic
+
 ## X86/X64 Architecture
 ifeq ($(ARCH), i386)
 CROSS_COMPILE	=
@@ -52,8 +64,19 @@ else
 INSTALL_PATH		:= ./
 endif
 
-all:
-	$(B_CC) $(LCFLAGS) -o $(TARGET) $(SRC)
+all: bios/bios.bin.elf 
+	$(B_CC) $(LCFLAGS) -o $(TARGET) $(SRC) bios/bios-rom.o
+
+bios/bios.bin.elf: FORCE
+	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/bios-memcpy.c -o bios/bios-memcpy.o
+	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/e820.c -o bios/e820.o
+	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/int10.c -o bios/int10.o
+	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/int15.c -o bios/int15.o
+	$(B_CC) $(LCFLAGS) $(BIOS_CFLAGS) -c bios/entry.S -o bios/entry.o
+	$(LD) -T bios/bios-rom.ld.S -o bios/bios.bin.elf bios/bios-memcpy.o bios/entry.o bios/int10.o bios/int15.o bios/e820.o
+	sh bios/gen-offset.sh > include/broiler/bios-rom.h
+	$(B_OBJCOPY) -O binary -j .text bios/bios.bin.elf bios/bios.bin
+	$(B_CC) -c $(LCFLAGS) bios/bios-rom.S -o bios/bios-rom.o
 
 install:
 	chmod 755 RunBiscuitOS.sh
@@ -61,4 +84,6 @@ install:
 	@cp -rfa $(TARGET) $(INSTALL_PATH)
 
 clean:
-	@rm -rf $(TARGET) *.o
+	@rm -rf $(TARGET) BiscuitOS-Broiler-default *.o bios/*.o bios/*.bin* include/broiler/bios-rom.h
+
+.PHONY: FORCE

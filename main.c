@@ -16,16 +16,13 @@
 #include "broiler/broiler.h"
 
 /* global data */
-char *kernel_name;
-char *rootfs_name;
-char *cmdline;
-int kvm_fd;
+struct broiler *broiler;
 
 void usage(const char *program_name) 
 {
 	printf("%s 1.0.0(2022-06-01)\n", program_name);
 	printf("This is a program BEMU\n");
-	printf("Usage:%s --kernel <kernel> --rootfs <rootfs> --memory <memory> "
+	printf("Usage:%s --kernel <kernel> --rootfs <rootfs> --memory <memory:MiB> "
 		"--cpu <cpu> --cmdline <cmdline>\n", program_name);
 }
 
@@ -45,21 +42,29 @@ int main(int argc, char *argv[])
 	int c;
 	opterr = 0;
 
+	broiler = calloc(sizeof(*broiler), 1);
+	if (!broiler) {
+		printf("NO free memory create broiler.\n");
+		abort();
+	}
+
 	while((c = getopt_long(argc, argv, short_opts, long_opts, NULL)) != -1) {
 		switch(c) {
 		case 'h':
 			hflag = 1;
 			break;
 		case 'k':
-			kernel_name = optarg;
+			broiler->kernel_name = optarg;
 			break;
 		case 'r':
-			rootfs_name = optarg;
+			broiler->rootfs_name = optarg;
 			break;
 		case 'd':
-			cmdline = optarg;
+			broiler->cmdline = optarg;
 			break;
 		case 'm':
+			broiler->ram_size = strtoll(optarg, NULL, 0);
+			broiler->ram_size <<= 20; /* MiB */
 			break;
 		case 'c':
 			break;
@@ -70,11 +75,7 @@ int main(int argc, char *argv[])
 			abort();
 		}
 	}
-	if (!kernel_name || !rootfs_name || !cmdline) {
-		usage(argv[0]);
-		abort();
-	}
 
-	broiler_base_init();
+	broiler_base_init(broiler);
 	return 0;
 }
