@@ -1,6 +1,16 @@
 #ifndef _BISCUITOS_BROILER_H
 #define _BISCUITOS_BROILER_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+
 #include "broiler/types.h"
 #include "broiler/bios-interrupt.h"
 #include "broiler/kvm.h"
@@ -8,6 +18,9 @@
 #define BROILER_MAX_CPUS	32
 #define ARRAY_SIZE(x)		(sizeof(x) / sizeof((x)[0]))
 #define PAGE_SIZE		4096
+
+#define ALIGN(x,a)		__ALIGN_MASK(x,(typeof(x))(a)-1)
+#define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))
 
 /* broiler as vm */
 struct broiler {
@@ -45,6 +58,7 @@ extern int broiler_setup_bios(struct broiler *broiler);
 extern int ioeventfd_init(struct broiler *broiler);
 extern int ioeventfd_exit(struct broiler *broiler);
 extern int broiler_cpu_init(struct broiler *broiler);
+extern int broiler_irq_init(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

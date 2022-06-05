@@ -46,8 +46,16 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_cpu;
 	}
 
+	/* IRQ */
+	if (broiler_irq_init(broiler) < 0) {
+		printf("IRQ init failed.\n");
+		ret = -errno;
+		goto err_irq;
+	}
+
 	return 0;
 
+err_irq:
 err_cpu:
 	ioeventfd_exit(broiler);
 err_ioeventfd:
