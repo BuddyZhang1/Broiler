@@ -23,6 +23,7 @@ SRC			+= $(PWD)/bios/bios.c
 LCFLAGS			+= -DCONFIG_BISCUITOS_APP
 ## Header
 LCFLAGS			+= -I./ -I$(PWD)/include
+LLIB			+= -lpthread
 
 DOT			:= -
 
@@ -65,7 +66,7 @@ INSTALL_PATH		:= ./
 endif
 
 all: bios/bios.bin.elf 
-	$(B_CC) $(LCFLAGS) -o $(TARGET) $(SRC) bios/bios-rom.o
+	$(B_CC) $(LCFLAGS) -o $(TARGET) $(SRC) bios/bios-rom.o $(LLIB)
 
 bios/bios.bin.elf: FORCE
 	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/bios-memcpy.c -o bios/bios-memcpy.o

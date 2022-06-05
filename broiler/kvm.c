@@ -4,11 +4,19 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
 #include <linux/kvm.h>
 #include "broiler/broiler.h"
+
+bool kvm_support_extension(struct broiler *broiler, unsigned int extension)
+{
+	if (ioctl(broiler->kvm_fd, KVM_CHECK_EXTENSION, extension) < 0)
+		return false;
+	return true;
+}
 
 int kvm_init(struct broiler *broiler)
 {

@@ -32,8 +32,25 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_bios_setup;
 	}
 
+	/* IOEVENTFD */
+	if (ioeventfd_init(broiler) < 0) {
+		printf("IOeventfd failed.\n");
+		ret = -errno;
+		goto err_ioeventfd;
+	}
+
+	/* CPU */
+	if (broiler_cpu_init(broiler) < 0) {
+		printf("CPU init failed.\n");
+		ret = -errno;
+		goto err_cpu;
+	}
+
 	return 0;
 
+err_cpu:
+	ioeventfd_exit(broiler);
+err_ioeventfd:
 err_bios_setup:
 err_load_kernel:
 	kvm_exit(broiler);

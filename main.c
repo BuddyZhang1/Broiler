@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
 			broiler->ram_size <<= 20; /* MiB */
 			break;
 		case 'c':
+			broiler->nr_cpu = strtol(optarg, NULL, 0);
 			break;
 		case '?':
 			printf("Error:unknow option '-%c'\n", optopt);
