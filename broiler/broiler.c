@@ -53,8 +53,24 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_irq;
 	}
 
+	/* IOPORT */
+	if (broiler_ioport_setup(broiler) < 0) {
+		printf("IOport init failed.\n");
+		ret = -errno;
+		goto err_ioport;
+	}
+
+	/* PCI */
+	if (broiler_pci_init(broiler) < 0) {
+		printf("PCI Init failed.\n");
+		ret = -errno;
+		goto err_pci;
+	}
+
 	return 0;
 
+err_pci:
+err_ioport:
 err_irq:
 err_cpu:
 	ioeventfd_exit(broiler);

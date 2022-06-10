@@ -16,6 +16,7 @@ endif
 
 ## Source Code
 SRC			+= $(wildcard $(PWD)/broiler/*.c)
+SRC			+= $(wildcard $(PWD)/lib/*.c)
 SRC			+= main.c
 SRC			+= $(PWD)/bios/bios.c
 

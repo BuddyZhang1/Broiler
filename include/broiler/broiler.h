@@ -22,6 +22,22 @@
 #define ALIGN(x,a)		__ALIGN_MASK(x,(typeof(x))(a)-1)
 #define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))
 
+#undef offsetof
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+
+#ifndef container_of
+/**
+ * container_of - cast a member of a structure out to the containing structure
+ * @ptr:        the pointer to the member.
+ * @type:       the type of the container struct this is embedded in.
+ * @member:     the name of the member within the struct.
+ *
+ */
+#define container_of(ptr, type, member) ({                      \
+	const typeof(((type *)0)->member) * __mptr = (ptr);     \
+	(type *)((char *)__mptr - offsetof(type, member)); })
+#endif
+
 /* broiler as vm */
 struct broiler {
 	int kvm_fd;
@@ -59,6 +75,8 @@ extern int ioeventfd_init(struct broiler *broiler);
 extern int ioeventfd_exit(struct broiler *broiler);
 extern int broiler_cpu_init(struct broiler *broiler);
 extern int broiler_irq_init(struct broiler *broiler);
+extern int broiler_ioport_setup(struct broiler *broiler);
+extern int broiler_pci_init(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {
