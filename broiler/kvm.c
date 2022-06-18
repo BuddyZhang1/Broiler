@@ -18,6 +18,12 @@ bool kvm_support_extension(struct broiler *broiler, unsigned int extension)
 	return true;
 }
 
+void broiler_reboot(struct broiler *broiler)
+{
+	/* Check if the guest is running */
+	printf("Broiler Reboot!\n");
+}
+
 int kvm_init(struct broiler *broiler)
 {
 	struct kvm_userspace_memory_region mem;

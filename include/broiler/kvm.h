@@ -46,5 +46,6 @@ extern int kvm_init(struct broiler *broiler);
 extern void kvm_exit(struct broiler *broiler);
 extern bool kvm_support_extension(struct broiler *broiler,
 					unsigned int extension);
+extern void broiler_reboot(struct broiler *broiler);
 
 #endif

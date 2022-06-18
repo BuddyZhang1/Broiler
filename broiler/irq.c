@@ -8,6 +8,27 @@ static struct kvm_irq_routing *irq_routing = NULL;
 static int allocated_gsis = 0;
 static int next_gsi;
 
+void broiler_irq_line(struct broiler *broiler, int irq, int level)
+{
+	struct kvm_irq_level irq_level = {
+		{
+			.irq = irq,
+		},
+		.level = level,
+	};
+
+	if (ioctl(broiler->vm_fd, KVM_IRQ_LINE, &irq_level) < 0) {
+		printf("KVM_IRQ_LINE failed.\n");
+		exit(1);
+	}
+}
+
+void broiler_irq_trigger(struct broiler *broiler, int irq)
+{
+	broiler_irq_line(broiler, irq, 1);
+	broiler_irq_line(broiler, irq, 0);
+}
+
 static int irq_allocate_routing_entry(void)
 {
 	size_t table_size = sizeof(struct kvm_irq_routing);

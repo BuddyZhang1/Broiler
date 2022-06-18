@@ -74,8 +74,17 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_rootfs;
 	}
 
+	/* Keyboard */
+	if (broiler_keyboard_init(broiler)) {
+		printf("Keyboard init failed.\n");
+		ret = -errno;
+		goto err_keyboard;
+	}
+
 	return 0;
 
+err_keyboard:
+	broiler_disk_image_exit(broiler);
 err_rootfs:
 	broiler_pci_exit(broiler);
 err_pci:

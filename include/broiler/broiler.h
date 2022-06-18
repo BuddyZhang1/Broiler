@@ -91,6 +91,7 @@ extern int broiler_pci_init(struct broiler *broiler);
 extern int broiler_pci_exit(struct broiler *broiler);
 extern int broiler_disk_image_init(struct broiler *broiler);
 extern int broiler_disk_image_exit(struct broiler *broiler);
+extern int broiler_keyboard_init(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

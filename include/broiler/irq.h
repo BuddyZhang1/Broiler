@@ -15,4 +15,7 @@ enum irq_type {
 	IRQ_TYPE_LEVEL_MASK   = (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH),
 };
 
+extern void broiler_irq_line(struct broiler *broiler, int irq, int level);
+extern void broiler_irq_trigger(struct broiler *broiler, int irq);
+
 #endif
