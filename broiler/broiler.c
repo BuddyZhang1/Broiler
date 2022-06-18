@@ -74,15 +74,22 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_rootfs;
 	}
 
-	/* Keyboard */
-	if (broiler_keyboard_init(broiler)) {
+	/* Keyboard and mouse  */
+	if (broiler_keyboard_init(broiler) < 0) {
 		printf("Keyboard init failed.\n");
 		ret = -errno;
 		goto err_keyboard;
 	}
 
+	/* Terminal */
+	if (broiler_terminal_init(broiler) < 0) {
+		printf("Terminal init failed.\n");
+		ret = -errno;
+		goto err_terminal;
+	}
 	return 0;
 
+err_terminal:
 err_keyboard:
 	broiler_disk_image_exit(broiler);
 err_rootfs:
