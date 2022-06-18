@@ -30,12 +30,30 @@ extern int broiler_ioport_register(struct broiler *broiler, u64 phys_addr,
                         u64 phys_addr_len, mmio_handler_fn mmio_fn,
                         void *ptr, unsigned int flags);
 
+extern bool broiler_ioport_deregister(struct broiler *broiler,
+                                u64 phys_addr, unsigned int flags);
+
 static inline int
 broiler_register_pio(struct broiler *broiler, u16 port, u16 len,
 					mmio_handler_fn mmio_fn, void *ptr)
 {
 	return broiler_ioport_register(broiler, port,
 				len, mmio_fn, ptr, DEVICE_BUS_IOPORT);
+}
+
+static inline int
+broiler_register_mmio(struct broiler *broiler, u64 phys_addr,
+	u64 len, bool coalesce, mmio_handler_fn mmio_fn, void *ptr)
+{
+	return broiler_ioport_register(broiler, phys_addr, len,
+				mmio_fn, ptr, DEVICE_BUS_MMIO |
+				(coalesce ? IOPORT_COALESCE : 0));
+}
+
+static inline bool
+broiler_deregister_pio(struct broiler *broiler, u16 port)
+{
+	return broiler_ioport_deregister(broiler, port, DEVICE_BUS_IOPORT);
 }
 
 static inline void ioport_write8(u8 *data, u8 value)

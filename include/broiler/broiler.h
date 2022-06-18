@@ -15,6 +15,11 @@
 #include "broiler/bios-interrupt.h"
 #include "broiler/kvm.h"
 
+/* Memory layout */
+#define BROILER_MMIO_START	(0x100000000)
+#define BROILER_PCI_CFG_AREA	(BROILER_MMIO_START + 0x1000000)
+#define BROILER_PCI_MMIO_AREA	(BROILER_MMIO_START + 0x2000000)
+
 #define BROILER_MAX_CPUS	32
 #define ARRAY_SIZE(x)		(sizeof(x) / sizeof((x)[0]))
 #define PAGE_SIZE		4096
@@ -77,6 +82,7 @@ extern int broiler_cpu_init(struct broiler *broiler);
 extern int broiler_irq_init(struct broiler *broiler);
 extern int broiler_ioport_setup(struct broiler *broiler);
 extern int broiler_pci_init(struct broiler *broiler);
+extern int broiler_pci_exit(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

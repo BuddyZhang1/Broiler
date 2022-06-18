@@ -1,6 +1,7 @@
 #ifndef _BISCUITOS_PCI_H
 #define _BISCUITOS_PCI_H
 
+#include <linux/pci_regs.h>
 #include "broiler/irq.h"
 /*
  * PCI Configuration Mechanism #1 I/O ports. See Section 3.7.4.1.
@@ -100,5 +101,42 @@ struct pci_device {
 	 */
 	enum irq_type		irq_type;
 };
+
+static inline u32 pci_bar_size(struct pci_device *pdev, int bar)
+{
+	return pdev->bar_size[bar];
+}
+
+static inline bool pci_bar_is_io(struct pci_device *pdev, int bar)
+{
+	return pdev->bar[bar] & PCI_BASE_ADDRESS_SPACE_IO;
+}
+
+static inline bool pci_io_space_enabled(u16 command)
+{
+	return command & PCI_COMMAND_IO;
+}
+
+static inline bool pci_memory_space_enabled(u16 command)
+{
+	return command & PCI_COMMAND_MEMORY;
+}
+
+static inline bool pci_bar_is_memory(struct pci_device *pdev, int bar)
+{
+	return !pci_bar_is_io(pdev, bar);
+}
+
+static inline u32 pci_bar_address_value(u32 bar)
+{
+	if (bar & PCI_BASE_ADDRESS_SPACE_IO)
+		return bar & PCI_BASE_ADDRESS_IO_MASK;
+	return bar & PCI_BASE_ADDRESS_MEM_MASK;
+}
+
+static inline u32 pci_bar_address(struct pci_device *pdev, int bar)
+{
+	return pci_bar_address_value(pdev->bar[bar]);
+}
 
 #endif

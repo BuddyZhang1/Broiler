@@ -5,6 +5,7 @@
 #include "linux/mutex.h"
 #include "linux/rbtree.h"
 
+#define mmio_node(n)	rb_entry(n, struct mmio_mapping, node)
 static DEFINE_MUTEX(mmio_lock);
 
 static struct rb_root mmio_tree = RB_ROOT;
@@ -16,6 +17,36 @@ static void dummy_io(struct kvm_cpu *vcpu, u64 addr,
 static int mmio_insert(struct rb_root *root, struct mmio_mapping *data)
 {
 	rb_int_insert(root, &data->node);
+}
+
+static void mmio_remove(struct rb_root *root, struct mmio_mapping *data)
+{
+	rb_int_erase(root, &data->node);
+}
+
+/* Called with mmio_lock held. */
+static void mmio_deregister(struct broiler *broiler,
+		struct rb_root *root, struct mmio_mapping *mmio)
+{
+	struct kvm_coalesced_mmio_zone zone = {
+		.addr = rb_int_start(&mmio->node),
+		.size = 1,
+	};
+	ioctl(broiler->vm_fd, KVM_UNREGISTER_COALESCED_MMIO, &zone);
+
+	mmio_remove(root, mmio);
+	free(mmio);
+}
+
+/* Find lowest match, Check for overlay */
+static struct mmio_mapping *mmio_search_single(struct rb_root *root, u64 addr)
+{
+	struct rb_int_node *node;
+
+	node = rb_int_search_single(root, addr);
+	if (node == NULL)
+		return NULL;
+	return mmio_node(node);
 }
 
 static bool ioport_is_mmio(unsigned int flags)
@@ -76,6 +107,45 @@ int broiler_ioport_register(struct broiler *broiler, u64 phys_addr,
 
 	return 0;
 
+}
+
+bool broiler_ioport_deregister(struct broiler *broiler,
+				u64 phys_addr, unsigned int flags)
+{
+	struct mmio_mapping *mmio;
+	struct rb_root *tree;
+
+	if (ioport_is_mmio(flags))
+		tree = &mmio_tree;
+	else
+		tree = &pio_tree;
+
+	mutex_lock(&mmio_lock);
+	mmio = mmio_search_single(tree, phys_addr);
+	if (mmio == NULL) {
+		mutex_unlock(&mmio_lock);
+		return false;
+	}
+
+	/*
+	 * The PCI emulation code calls this function when memroy access is
+	 * disabled for a device, or when a BAR has a new address assigned.
+	 * PCI emulation doesn't use any locks and as a result we can end
+	 * up in a situation where we have called mmio_get() to do emulation
+	 * on one VCPU thread (let's call it VCPU0), and several other VCPU
+	 * threads have called broiler_deregister_mmio(). In this case, if
+	 * we decrement refcount kvm_deregister_mmio() (eigher directly, or
+	 * by calling mmio_put()), refcount will reach 0 and we will free
+	 * the mmio node before VCPU0 has call mmio_put(). This will trigger
+	 * use-after-free errors on VPU0.
+	 */
+	if (mmio->refcount == 0)
+		mmio_deregister(broiler, tree, mmio);
+	else
+		mmio->remove = true;
+	mutex_unlock(&mmio_lock);
+
+	return true;
 }
 
 int broiler_ioport_setup(struct broiler *broiler)

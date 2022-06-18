@@ -23,5 +23,8 @@ struct device_bus {
 };
 
 extern struct device *device_search(enum device_bus_type bus_type, u8 devnum);
+extern struct device *device_first_dev(enum device_bus_type bus_type);
+extern struct device *device_next_dev(struct device *dev);
+struct device *device_find_dev(enum device_bus_type bus_type, u8 dev_num);
 
 #endif
