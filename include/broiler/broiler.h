@@ -14,6 +14,7 @@
 #include "broiler/types.h"
 #include "broiler/bios-interrupt.h"
 #include "broiler/kvm.h"
+#include "broiler/disk.h"
 
 /* Memory layout */
 #define BROILER_MMIO_START	(0x100000000)
@@ -64,6 +65,11 @@ struct broiler {
 	/* PCI */
 	unsigned long pci_base;
 
+	/* Disk */
+	char *disk_name[MAX_DISK_IMAGES];
+	struct disk_image **disks;
+	int nr_disks;
+
 	/* boot */
 	u16 boot_selector;
 	u16 boot_ip;
@@ -83,6 +89,8 @@ extern int broiler_irq_init(struct broiler *broiler);
 extern int broiler_ioport_setup(struct broiler *broiler);
 extern int broiler_pci_init(struct broiler *broiler);
 extern int broiler_pci_exit(struct broiler *broiler);
+extern int broiler_disk_image_init(struct broiler *broiler);
+extern int broiler_disk_image_exit(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

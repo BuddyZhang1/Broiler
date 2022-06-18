@@ -58,6 +58,8 @@ int main(int argc, char *argv[])
 			break;
 		case 'r':
 			broiler->rootfs_name = optarg;
+			broiler->disk_name[broiler->nr_disks] = optarg;
+			broiler->nr_disks++;
 			break;
 		case 'd':
 			broiler->cmdline = optarg;

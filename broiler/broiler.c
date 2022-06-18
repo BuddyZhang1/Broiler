@@ -67,8 +67,17 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_pci;
 	}
 
+	/* ROOTFS */
+	if (broiler_disk_image_init(broiler) < 0) {
+		printf("ROOTFS init failed.\n");
+		ret = -errno;
+		goto err_rootfs;
+	}
+
 	return 0;
 
+err_rootfs:
+	broiler_pci_exit(broiler);
 err_pci:
 err_ioport:
 err_irq:
