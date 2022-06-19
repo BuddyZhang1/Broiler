@@ -1,59 +1,10 @@
 #include "broiler/broiler.h"
 #include "broiler/disk.h"
 #include "broiler/err.h"
+#include "broiler/utils.h"
 #include <mntent.h>
 
-static inline ssize_t get_iov_size(const struct iovec *iov, int iovcnt)
-{
-	size_t size = 0;
-
-	while (iovcnt--)
-		size += (iov++)->iov_len;
-
-	return size;
-}
-
-static inline void shift_iovec(const struct iovec **iov, int *iovcnt,
-		size_t nr, ssize_t *total, size_t *count, off_t *offset)
-{
-	while (nr >= (*iov)->iov_len) {
-		nr -= (*iov)->iov_len;
-		*total += (*iov)->iov_len;
-		*count -= (*iov)->iov_len;
-		if (offset)
-			*offset += (*iov)->iov_len;
-		(*iovcnt)--;
-		(*iov)++;
-	}
-}
-
-/* Same as preadv(2) execpt that this function never returns EAGAIN or EINTR */
-ssize_t broiler_pread(int fd, const struct iovec *iov, int iovcnt, off_t offset)
-{
-	ssize_t nr;
-
-restart:
-	nr = pread(fd, (void *)iov, iovcnt, offset);
-	if ((nr < 0) && ((errno == EAGAIN) || (errno == EINTR)))
-		goto restart;
-
-	return nr;
-}
-
-/* Same as pwrite(2) except that this function never returns EAGAIN or EINTR */
-ssize_t broiler_pwrite(int fd, const struct iovec *iov, int iovcnt, off_t offset)
-{
-	ssize_t nr;
-
-restart:
-	nr = pwrite(fd, iov, iovcnt, offset);
-	if ((nr < 0) && ((errno == EAGAIN) || (errno == EINTR)))
-		goto restart;
-
-	return nr;
-}
-
-ssize_t raw_image_read(struct disk_image *disk, u64 sector,
+static ssize_t raw_image_read(struct disk_image *disk, u64 sector,
 		const struct iovec *iov, int iovcount, void *param)
 {
 	ssize_t count = get_iov_size(iov, iovcount);
@@ -76,7 +27,7 @@ ssize_t raw_image_read(struct disk_image *disk, u64 sector,
 	return total;
 }
 
-ssize_t raw_image_write(struct disk_image *disk, u64 sector,
+static ssize_t raw_image_write(struct disk_image *disk, u64 sector,
 		const struct iovec *iov, int iovcount, void *param)
 {
 	ssize_t count = get_iov_size(iov, iovcount);

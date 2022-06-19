@@ -66,3 +66,41 @@ struct device *device_find_dev(enum device_bus_type bus_type, u8 dev_num)
 
 	return NULL;
 }
+
+int device_register(struct device *dev)
+{
+	struct device_bus *bus;
+	struct rb_node **node, *parent = NULL;
+
+	if (dev->bus_type >= DEVICE_BUS_MAX) {
+		printf("Ignoring device register on unknow bus %d\n",
+					dev->bus_type);
+		return -EINVAL;
+	}
+
+	bus = &device_trees[dev->bus_type];
+	dev->dev_num = bus->dev_num++;
+
+	node = &bus->root.rb_node;
+	while (*node) {
+		int num = rb_entry(*node, struct device, node)->dev_num;
+		int result = dev->dev_num - num;
+
+		parent = *node;
+		if (result < 0)
+			node = &((*node)->rb_left);
+		else if (result > 0)
+			node = &((*node)->rb_right);
+		else
+			return -EEXIST;
+	}
+	rb_link_node(&dev->node, parent, node);
+	rb_insert_color(&dev->node, &bus->root);
+	return 0;
+}
+
+void device_unregister(struct device *dev)
+{
+	struct device_bus *bus = &device_trees[dev->bus_type];
+	rb_erase(&dev->node, &bus->root);
+}
