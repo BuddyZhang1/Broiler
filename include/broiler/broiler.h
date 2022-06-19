@@ -71,6 +71,9 @@ struct broiler {
 	struct disk_image **disks;
 	int nr_disks;
 
+	/* NMI */
+	bool nmi_disabled;
+
 	/* boot */
 	u16 boot_selector;
 	u16 boot_ip;
@@ -95,6 +98,8 @@ extern int broiler_disk_image_exit(struct broiler *broiler);
 extern int broiler_keyboard_init(struct broiler *broiler);
 extern int broiler_terminal_init(struct broiler *broiler);
 extern int broiler_terminal_exit(struct broiler *broiler);
+extern int broiler_rtc_init(struct broiler *broiler);
+extern int broiler_rtc_exit(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

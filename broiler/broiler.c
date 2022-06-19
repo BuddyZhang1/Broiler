@@ -81,14 +81,24 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_keyboard;
 	}
 
-	/* Terminal */
+	/* Terminal and serial8250  */
 	if (broiler_terminal_init(broiler) < 0) {
 		printf("Terminal init failed.\n");
 		ret = -errno;
 		goto err_terminal;
 	}
+
+	/* RTC */
+	if (broiler_rtc_init(broiler) < 0) {
+		printf("RTC init failed.\n");
+		ret = -errno;
+		goto err_rtc;
+	}
+
 	return 0;
 
+err_rtc:
+	broiler_terminal_exit(broiler);
 err_terminal:
 err_keyboard:
 	broiler_disk_image_exit(broiler);
