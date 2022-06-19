@@ -110,5 +110,7 @@ err_ioport:
 
 int broiler_rtc_exit(struct broiler *broiler)
 {
+	broiler_ioport_deregister(broiler, RTC_BASE_ADDRESS, RTC_BUS_TYPE);
+
 	return 0;
 }
