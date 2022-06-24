@@ -15,10 +15,11 @@
 #include "broiler/bios-interrupt.h"
 #include "broiler/kvm.h"
 #include "broiler/disk.h"
+#include "broiler/barrier.h"
 
 /* Memory layout */
 #define BROILER_IOPORT_AREA	(0x000000000)
-#define BROILER_MMIO_START	(0x100000000)
+#define BROILER_MMIO_START	(0xE0000000)
 #define BROILER_PCI_CFG_AREA	(BROILER_MMIO_START + 0x1000000)
 #define BROILER_PCI_MMIO_AREA	(BROILER_MMIO_START + 0x2000000)
 
@@ -100,6 +101,8 @@ extern int broiler_terminal_init(struct broiler *broiler);
 extern int broiler_terminal_exit(struct broiler *broiler);
 extern int broiler_rtc_init(struct broiler *broiler);
 extern int broiler_rtc_exit(struct broiler *broiler);
+extern int broiler_virtio_init(struct broiler *broiler);
+extern int broiler_virtio_exit(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

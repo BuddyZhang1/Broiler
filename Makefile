@@ -17,6 +17,7 @@ endif
 ## Source Code
 SRC			+= $(wildcard $(PWD)/broiler/*.c)
 SRC			+= $(wildcard $(PWD)/lib/*.c)
+SRC			+= $(wildcard $(PWD)/virtio/*.c)
 SRC			+= main.c
 SRC			+= $(PWD)/bios/bios.c
 
@@ -70,18 +71,18 @@ all: bios/bios.bin.elf
 	$(B_CC) $(LCFLAGS) -o $(TARGET) $(SRC) bios/bios-rom.o $(LLIB)
 
 bios/bios.bin.elf: FORCE
-	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/bios-memcpy.c -o bios/bios-memcpy.o
-	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/e820.c -o bios/e820.o
-	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/int10.c -o bios/int10.o
-	$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/int15.c -o bios/int15.o
-	$(B_CC) $(LCFLAGS) $(BIOS_CFLAGS) -c bios/entry.S -o bios/entry.o
-	$(LD) -T bios/bios-rom.ld.S -o bios/bios.bin.elf bios/bios-memcpy.o bios/entry.o bios/int10.o bios/int15.o bios/e820.o
-	sh bios/gen-offset.sh > include/broiler/bios-rom.h
-	$(B_OBJCOPY) -O binary -j .text bios/bios.bin.elf bios/bios.bin
-	$(B_CC) -c $(LCFLAGS) bios/bios-rom.S -o bios/bios-rom.o
+	@$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/bios-memcpy.c -o bios/bios-memcpy.o
+	@$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/e820.c -o bios/e820.o
+	@$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/int10.c -o bios/int10.o
+	@$(B_CC) -include include/broiler/code16gcc.h $(LCFLAGS) $(BIOS_CFLAGS) -c bios/int15.c -o bios/int15.o
+	@$(B_CC) $(LCFLAGS) $(BIOS_CFLAGS) -c bios/entry.S -o bios/entry.o
+	@$(LD) -T bios/bios-rom.ld.S -o bios/bios.bin.elf bios/bios-memcpy.o bios/entry.o bios/int10.o bios/int15.o bios/e820.o
+	@sh bios/gen-offset.sh > include/broiler/bios-rom.h
+	@$(B_OBJCOPY) -O binary -j .text bios/bios.bin.elf bios/bios.bin
+	@$(B_CC) -c $(LCFLAGS) bios/bios-rom.S -o bios/bios-rom.o
 
 install:
-	chmod 755 RunBiscuitOS.sh
+	@chmod 755 RunBiscuitOS.sh
 	@cp -rfa RunBiscuitOS.sh $(INSTALL_PATH)
 	@cp -rfa $(TARGET) $(INSTALL_PATH)
 

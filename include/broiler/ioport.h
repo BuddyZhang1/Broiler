@@ -66,9 +66,24 @@ static inline void ioport_write8(u8 *data, u8 value)
 	*data = value;
 }
 
+static inline u16 ioport_read16(u16 *data)
+{
+	return *data;
+}
+
+static inline void ioport_write16(u16 *data, u16 value)
+{
+	*data = value;
+}
+
 static inline u32 ioport_read32(u32 *data)
 {
 	return *data;
+}
+
+static inline void ioport_write32(u32 *data, u32 value)
+{
+	*data = value;
 }
 
 #endif

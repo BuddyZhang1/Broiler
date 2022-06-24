@@ -1,4 +1,6 @@
 #include "broiler/broiler.h"
+#include "broiler/irq.h"
+#include "broiler/kvm.h"
 
 #define IRQCHIP_MASTER		0
 #define IRQCHIP_SLAVE		1
@@ -7,6 +9,8 @@
 static struct kvm_irq_routing *irq_routing = NULL;
 static int allocated_gsis = 0;
 static int next_gsi;
+static struct msi_routing_ops irq_default_routing_ops;
+static struct msi_routing_ops *msi_routing_ops = &irq_default_routing_ops;
 
 void broiler_irq_line(struct broiler *broiler, int irq, int level)
 {
@@ -72,6 +76,114 @@ static int irq_add_routing(u32 gsi, u32 type, u32 irqchip, u32 pin)
 		};
 
 	return 0;
+}
+
+static bool update_data(u32 *ptr, u32 newdata)
+{
+	if (*ptr == newdata)
+		return false;
+	*ptr = newdata;
+	return true;
+}
+
+void irq_update_msix_route(struct broiler *broiler, u32 gsi, struct msi_msg *msg)
+{
+	struct kvm_irq_routing_msi *entry;
+	unsigned int i;
+	bool changed;
+
+	for (i = 0; i < irq_routing->nr; i++)
+		if (gsi == irq_routing->entries[i].gsi)
+			break;
+	if (i == irq_routing->nr)
+		return;
+
+	entry = &irq_routing->entries[i].u.msi;
+	changed  = update_data(&entry->address_hi, msg->address_hi);
+	changed |= update_data(&entry->address_lo, msg->address_lo);
+	changed |= update_data(&entry->data, msg->data);
+
+	if (!changed)
+		return;
+
+	if (msi_routing_ops->update_route(broiler, &irq_routing->entries[i]))
+		printf("KVM_SET_GSI_ROUTING bad\n");
+}
+
+static int irq_update_msix_routes(struct broiler * broiler,
+				struct kvm_irq_routing_entry *entry)
+{
+	return ioctl(broiler->vm_fd, KVM_SET_GSI_ROUTING, irq_routing);
+}
+
+static int irq_default_signal_msi(struct broiler *broiler, struct kvm_msi *msi)
+{
+	return ioctl(broiler->vm_fd, KVM_SIGNAL_MSI, msi);
+}
+
+static bool irq_default_can_signal_msi(struct broiler *broiler)
+{
+	return kvm_support_extension(broiler, KVM_CAP_SIGNAL_MSI);
+}
+
+static struct msi_routing_ops irq_default_routing_ops = {
+	.update_route	= irq_update_msix_routes,
+	.signal_msi	= irq_default_signal_msi,
+	.can_signal_msi	= irq_default_can_signal_msi,
+};
+
+bool irq_can_signal_msi(struct broiler *broiler)
+{
+	return msi_routing_ops->can_signal_msi(broiler);
+}
+
+int irq_signal_msi(struct broiler *broiler, struct kvm_msi *msi)
+{
+	return msi_routing_ops->signal_msi(broiler, msi);
+}
+
+static bool check_for_irq_routing(struct broiler *broiler)
+{
+	static int has_irq_routing = 0;
+
+	if (has_irq_routing == 0) {
+		if (kvm_support_extension(broiler, KVM_CAP_IRQ_ROUTING))
+			has_irq_routing = 1;
+		else
+			has_irq_routing = -1;
+	}
+
+	return has_irq_routing > 0;
+}
+
+int irq_add_msix_route(struct broiler *broiler,
+				struct msi_msg *msg, u32 device_id)
+{
+	struct kvm_irq_routing_entry *entry;
+	int r;
+
+	if (!check_for_irq_routing(broiler))
+		return -ENXIO;
+
+	r = irq_allocate_routing_entry();
+	if (r)
+		return r;
+
+	entry = &irq_routing->entries[irq_routing->nr];
+	*entry = (struct kvm_irq_routing_entry) {
+		.gsi = next_gsi,
+		.type = KVM_IRQ_ROUTING_MSI,
+		.u.msi.address_hi = msg->address_hi,
+		.u.msi.address_lo = msg->address_lo,
+		.u.msi.data = msg->data,
+	};
+	irq_routing->nr++;
+
+	r = msi_routing_ops->update_route(broiler, entry);
+	if (r)
+		return r;
+
+	return next_gsi++;
 }
 
 int broiler_irq_init(struct broiler *broiler)

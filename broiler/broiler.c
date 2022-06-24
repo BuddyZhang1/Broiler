@@ -95,8 +95,17 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_rtc;
 	}
 
+	/* virtio */
+	if (broiler_virtio_init(broiler) < 0) {
+		printf("VIRTIO init failed.\n");
+		ret = -errno;
+		goto err_virtio;
+	}
+
 	return 0;
 
+err_virtio:
+	broiler_rtc_exit(broiler);
 err_rtc:
 	broiler_terminal_exit(broiler);
 err_terminal:

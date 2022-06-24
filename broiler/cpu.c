@@ -1,4 +1,5 @@
 #include <sys/mman.h>
+#include <sys/eventfd.h>
 
 #include "broiler/broiler.h"
 #include "broiler/apicdef.h"

@@ -3,6 +3,12 @@
 
 #include <linux/pci_regs.h>
 #include "broiler/irq.h"
+#include "broiler/msi.h"
+
+#define PCI_VENDOR_ID_REDHAT_QUMRANET		0x1af4
+#define PCI_VENDOR_ID_PCI_SHMEM			0x0001
+#define PCI_SUBSYSTEM_VENDOR_ID_REDHAT_QUMRANET	0x1af4
+
 /*
  * PCI Configuration Mechanism #1 I/O ports. See Section 3.7.4.1.
  * ("Configuration Mechanism #1") of the PCI Local Bus Specification 2.1 for
@@ -46,6 +52,11 @@ union pci_config_address {
                 unsigned        enable_bit      : 1;            /* 31       */
 	};
 	u32 w;
+};
+
+struct msix_table {
+	struct msi_msg msg;
+	u32 ctrl;
 };
 
 struct msix_cap {
@@ -138,5 +149,11 @@ static inline u32 pci_bar_address(struct pci_device *pdev, int bar)
 {
 	return pci_bar_address_value(pdev->bar[bar]);
 }
+
+extern u16 pci_alloc_io_port_block(u32 size);
+extern u32 pci_alloc_mmio_block(u32 size);
+extern int pci_register_bar_regions(struct broiler *, struct pci_device *,
+		bar_activate_fn_t, bar_deactivate_fn_t, void *);
+extern int pci_assign_irq(struct pci_device *pdev);
 
 #endif

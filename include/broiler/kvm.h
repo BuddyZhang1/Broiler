@@ -13,6 +13,7 @@
 #define BOOT_CMDLINE_OFFSET	0x20000
 
 #define KVM_CAP_IOEVENTFD	36
+#define KVM_IRQ_OFFSET		5
 
 struct kvm_cpu {
 	pthread_t thread; /* VCPU thread */ 
@@ -47,5 +48,6 @@ extern void kvm_exit(struct broiler *broiler);
 extern bool kvm_support_extension(struct broiler *broiler,
 					unsigned int extension);
 extern void broiler_reboot(struct broiler *broiler);
+extern int __attribute__((weak)) kvm_cpu_get_endianness(struct kvm_cpu *);
 
 #endif

@@ -5,6 +5,55 @@
 #include "broiler/device.h"
 
 static u32 pci_config_address_bits;
+static u8 next_line = KVM_IRQ_OFFSET;
+
+/*
+ * This is within our PCI gap - in an unused area.
+ * Note this is a PCI *bus address*, is used to assign BARs etc.!
+ * (That's why it can still 32bit even with 64bit guests -- 64bit
+ * PCI isn't currently supported.)
+ */
+static u32 pci_mmio_blocks 	= BROILER_PCI_MMIO_AREA;
+static u32 pci_io_port_blocks	= PCI_IOPORT_START;
+
+int irq_alloc_line(void)
+{
+	return next_line++;
+}
+
+u16 pci_alloc_io_port_block(u32 size)
+{
+	u16 port = ALIGN(pci_io_port_blocks, PCI_IO_SIZE);
+
+	pci_io_port_blocks = port + size;
+	return port;
+}
+
+/* BARs must be naturally aligned, so enforce this in the allocator */
+u32 pci_alloc_mmio_block(u32 size)
+{
+	u32 block = ALIGN(pci_mmio_blocks, size);
+
+	pci_mmio_blocks = block + size;
+	return block;
+}
+
+int pci_assign_irq(struct pci_device *pdev)
+{
+	/*
+	 * PCI supports only INTA#,B#,C#,D# per device.
+	 *
+	 * A#, B#, C#, D# are allowed for multifunctional devices so stick
+	 * with A# for our singal function devices.
+	 */
+	pdev->irq_pin		= 1;
+	pdev->irq_line		= irq_alloc_line();
+
+	if (!pdev->irq_type)
+		pdev->irq_type = IRQ_TYPE_LEVEL_HIGH;
+
+	return pdev->irq_line;
+}
 
 static bool pci_device_exists(u8 bus, u8 device, u8 function)
 {
@@ -362,6 +411,39 @@ static void pci_config_mmio_access(struct kvm_cpu *vcpu, u64 addr,
 		pci_config_wr(broiler, cfg_addr, data, len);
 	else
 		pci_config_rd(broiler, cfg_addr, data, len);
+}
+
+int pci_register_bar_regions(struct broiler *broiler, struct pci_device *pdev,
+		bar_activate_fn_t bar_activate_fn,
+		bar_deactivate_fn_t bar_deactivate_fn, void *data)
+{
+	int i, r;
+
+	pdev->bar_activate_fn = bar_activate_fn;
+	pdev->bar_deactivate_fn = bar_deactivate_fn;
+	pdev->data = data;
+
+	for (i = 0; i < 6; i++) {
+		if (!pci_bar_is_implemented(pdev, i))
+			continue;
+		if (pci_bar_is_active(pdev, i))
+			continue;
+
+		if (pci_bar_is_io(pdev, i) &&
+			pci_io_space_enabled(pdev->command)) {
+			r = pci_activate_bar(broiler, pdev, i);
+			if (r < 0)
+				return r;
+		}
+
+		if (pci_bar_is_memory(pdev, i) &&
+			pci_memory_space_enabled(pdev->command)) {
+			r = pci_activate_bar(broiler, pdev, i);
+			if (r < 0)
+				return r;
+		}
+	}
+	return 0;
 }
 
 int broiler_pci_init(struct broiler *broiler)

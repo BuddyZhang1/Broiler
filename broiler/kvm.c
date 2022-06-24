@@ -10,12 +10,18 @@
 
 #include <linux/kvm.h>
 #include "broiler/broiler.h"
+#include "broiler/virtio.h"
 
 bool kvm_support_extension(struct broiler *broiler, unsigned int extension)
 {
 	if (ioctl(broiler->kvm_fd, KVM_CHECK_EXTENSION, extension) < 0)
 		return false;
 	return true;
+}
+
+int __attribute__((weak)) kvm_cpu_get_endianness(struct kvm_cpu *vcpu)
+{
+	return VIRTIO_ENDIAN_HOST;
 }
 
 void broiler_reboot(struct broiler *broiler)

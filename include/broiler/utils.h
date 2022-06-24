@@ -27,6 +27,16 @@ static inline void shift_iovec(const struct iovec **iov, int *iovcnt,
 	}
 }
 
+/*
+ * Find last (most significant) bit set. Same implementation as Linux:
+ * fls(0) = 0, fls(1) = 1, fls(1UL << 63) = 64
+ */
+static inline int fls_long(unsigned long x)
+{
+	return x ? sizeof(x) * 8 - __builtin_clzl(x) : 0;
+}
+
+
 extern ssize_t broiler_pread(int, const struct iovec *, int, off_t);
 extern ssize_t broiler_pwrite(int, const struct iovec *, int, off_t);
 extern ssize_t read_in_full(int fd, void *buf, size_t count);

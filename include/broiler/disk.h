@@ -45,4 +45,7 @@ static inline int raw_image_wait(struct disk_image *disk)
 	return 0;
 }
 
+extern void disk_image_set_callback(struct disk_image *disk,
+		void (*disk_req_cb)(void *param, long len));
+
 #endif

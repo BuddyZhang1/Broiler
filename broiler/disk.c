@@ -124,6 +124,12 @@ static int disk_image_close(struct disk_image *disk)
 	return 0;
 }
 
+void disk_image_set_callback(struct disk_image *disk,
+		void (*disk_req_cb)(void *param, long len))
+{
+	disk->disk_req_cb = disk_req_cb;
+}
+
 int broiler_disk_image_init(struct broiler *broiler)
 {
 	struct disk_image **disks;

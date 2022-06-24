@@ -19,6 +19,7 @@
 static struct epoll_event events[IOEVENTFD_MAX_EVENTS];
 static bool ioeventfd_avail;
 static int epoll_fd, epoll_stop_fd;
+static LIST_HEAD(used_ioevents);
 
 static void *ioeventfd_thread(void *param)
 {
@@ -60,6 +61,106 @@ static int ioeventfd_start(void)
 		return -ENOSYS;
 
 	return pthread_create(&thread, NULL, ioeventfd_thread, NULL);
+}
+
+int ioeventfd_add_event(struct ioevent *ioevent, int flags)
+{
+	struct kvm_ioeventfd kvm_ioevent;
+	struct epoll_event epoll_event;
+	struct ioevent *new_ioevent;
+	int event, r;
+
+	if (!ioeventfd_avail)
+		return -ENOSYS;
+
+	new_ioevent = malloc(sizeof(*new_ioevent));
+	if (!new_ioevent)
+		return -ENOMEM;
+
+	*new_ioevent = *ioevent;
+	event = new_ioevent->fd;
+
+	kvm_ioevent = (struct kvm_ioeventfd) {
+		.addr		= ioevent->io_addr,
+		.len		= ioevent->io_len,
+		.datamatch	= ioevent->datamatch,
+		.fd		= event,
+		.flags		= KVM_IOEVENTFD_FLAG_DATAMATCH,
+	};
+
+	/*
+	 * For architectures that don't recognize PIO accesses, always register
+	 * on the MMIO bus. Otherwise PIO accesses will cause returns to
+	 * userspace.
+	 */
+	if (KVM_IOEVENTFD_HAS_PIO && flags & IOEVENTFD_FLAG_PIO)
+		kvm_ioevent.flags |= KVM_IOEVENTFD_FLAG_PIO;
+
+	r = ioctl(ioevent->broiler->vm_fd, KVM_IOEVENTFD, &kvm_ioevent);
+	if (r) {
+		r = -errno;
+		goto cleanup;
+	}
+
+	if (flags & IOEVENTFD_FLAG_USER_POLL) {
+		epoll_event = (struct epoll_event) {
+			.events		= EPOLLIN,
+			.data.ptr	= new_ioevent,
+		};
+
+		r = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event, &epoll_event);
+		if (r) {
+			r = -errno;
+			goto cleanup;
+		}
+	}
+	new_ioevent->flags = kvm_ioevent.flags;
+	list_add_tail(&new_ioevent->list, &used_ioevents);
+
+	return 0;
+
+cleanup:
+	free(new_ioevent);
+	return r;
+}
+
+int ioeventfd_del_event(u64 addr, u64 datamatch)
+{
+	struct kvm_ioeventfd kvm_ioevent;
+	struct ioevent *ioevent;
+	u8 found = 0;
+
+	if (!ioeventfd_avail)
+		return -ENOSYS;
+
+	list_for_each_entry(ioevent, &used_ioevents, list) {
+		if (ioevent->io_addr == addr &&
+			ioevent->datamatch == datamatch) {
+			found = 1;
+			break;
+		}
+	}
+
+	if (found == 0 || ioevent == NULL)
+		return -ENOENT;
+
+	kvm_ioevent = (struct kvm_ioeventfd) {
+		.fd		= ioevent->fd,
+		.addr		= ioevent->io_addr,
+		.len		= ioevent->io_len,
+		.datamatch	= ioevent->datamatch,
+		.flags		= ioevent->flags |
+					KVM_IOEVENTFD_FLAG_DEASSIGN,
+	};
+
+	ioctl(ioevent->broiler->vm_fd, KVM_IOEVENTFD, &kvm_ioevent);
+	epoll_ctl(epoll_fd, EPOLL_CTL_DEL, ioevent->fd, NULL);
+	list_del(&ioevent->list);
+
+	close(ioevent->fd);
+	free(ioevent);
+
+	return 0;
 }
 
 int ioeventfd_init(struct broiler *broiler)
