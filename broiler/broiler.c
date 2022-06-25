@@ -102,8 +102,18 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_virtio;
 	}
 
+	/* mptable */
+	if (broiler_mptable_init(broiler) < 0) {
+		printf("MPTABLE init failed.\n");
+		ret = -errno;
+		goto err_mptable;
+	}
+
 	return 0;
 
+	broiler_mptable_exit(broiler);
+err_mptable:
+	broiler_virtio_exit(broiler);
 err_virtio:
 	broiler_rtc_exit(broiler);
 err_rtc:

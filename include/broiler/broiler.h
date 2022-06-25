@@ -125,6 +125,8 @@ extern int broiler_rtc_init(struct broiler *broiler);
 extern int broiler_rtc_exit(struct broiler *broiler);
 extern int broiler_virtio_init(struct broiler *broiler);
 extern int broiler_virtio_exit(struct broiler *broiler);
+extern int broiler_mptable_init(struct broiler *broiler);
+extern int broiler_mptable_exit(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {
