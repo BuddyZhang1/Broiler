@@ -109,8 +109,17 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_mptable;
 	}
 
+	/* threadpool */
+	if (broiler_threadpool_init(broiler) < 0) {
+		printf("Threadpool init failed.\n");
+		ret = -errno;
+		goto err_threadpool;
+	}
+
 	return 0;
 
+	broiler_threadpool_exit(broiler);
+err_threadpool:
 	broiler_mptable_exit(broiler);
 err_mptable:
 	broiler_virtio_exit(broiler);
