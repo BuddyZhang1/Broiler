@@ -47,5 +47,13 @@ static inline int raw_image_wait(struct disk_image *disk)
 
 extern void disk_image_set_callback(struct disk_image *disk,
 		void (*disk_req_cb)(void *param, long len));
+extern ssize_t disk_image_read(struct disk_image *disk, u64 sector,
+		const struct iovec *iov, int iovcount, void *param);
+extern ssize_t disk_image_write(struct disk_image *disk, u64 sector,
+		const struct iovec *iov, int iovcount, void *param);
+extern int disk_image_flush(struct disk_image *disk);
+extern ssize_t disk_image_get_serial(struct disk_image *disk, struct iovec *,
+					int iovcount, ssize_t len);
+extern int disk_image_wait(struct disk_image *disk);
 
 #endif

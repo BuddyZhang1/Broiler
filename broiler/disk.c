@@ -2,6 +2,7 @@
 #include "broiler/disk.h"
 #include "broiler/err.h"
 #include "broiler/utils.h"
+#include "broiler/iovec.h"
 #include <mntent.h>
 
 static ssize_t raw_image_read(struct disk_image *disk, u64 sector,
@@ -128,6 +129,103 @@ void disk_image_set_callback(struct disk_image *disk,
 		void (*disk_req_cb)(void *param, long len))
 {
 	disk->disk_req_cb = disk_req_cb;
+}
+
+/*
+ * Fill iov with disk data, starting from sector 'sector'
+ * Return amount of bytes read.
+ */
+ssize_t disk_image_read(struct disk_image *disk, u64 sector,
+		const struct iovec *iov, int iovcount, void *param)
+{
+	ssize_t total = 0;
+
+	if (disk->ops->read) {
+		total = disk->ops->read(disk, sector, iov, iovcount, param);
+		if (total < 0) {
+			printf("disk_image_read error: total=%ld\n", 
+								(long)total);
+			return total;
+		}
+	}
+
+	if (!disk->async && disk->disk_req_cb)
+		disk->disk_req_cb(param, total);
+
+	return total;
+}
+
+/*
+ * Write iov to disk, starting from sector 'sector'.
+ * Return amount of bytes written.
+ */
+ssize_t disk_image_write(struct disk_image *disk, u64 sector,
+		const struct iovec *iov, int iovcount, void *param)
+{
+	ssize_t total = 0;
+
+	if (disk->ops->write) {
+		/*
+		 * Try writev based operation first
+		 */
+		total = disk->ops->write(disk, sector, iov, iovcount, param);
+		if (total < 0) {
+			printf("disk_image_write error: total=%ld\n",
+								(long)total);
+			return total;
+		}
+	} else
+		; /* Do nothing */
+
+	if (!disk->async && disk->disk_req_cb)
+		disk->disk_req_cb(param, total);
+
+	return total;
+}
+
+int disk_image_flush(struct disk_image *disk)
+{
+	if (disk->ops->flush)
+		return disk->ops->flush(disk);
+
+	return fsync(disk->fd);
+}
+
+ssize_t disk_image_get_serial(struct disk_image *disk, struct iovec *iov,
+				int iovcount, ssize_t len)
+{
+	struct stat st;
+	void *buf;
+	int r;
+
+	r = fstat(disk->fd, &st);
+	if (r)
+		return r;
+
+	buf = malloc(len);
+	if (!buf)
+		return -ENOMEM;
+
+	len = snprintf(buf, len, "%llu%llu%llu",
+			(unsigned long long)st.st_dev,
+			(unsigned long long)st.st_rdev,
+			(unsigned long long)st.st_ino);
+	if (len < 0 || (size_t)len > iov_size(iov, iovcount)) {
+		free(buf);
+		return -ENOMEM;
+	}
+
+	memcpy_toiovec(iov, buf, len);
+	free(buf);
+	return len;
+}
+
+int disk_image_wait(struct disk_image *disk)
+{
+	if (disk->ops->wait)
+		return disk->ops->wait(disk);
+
+	return 0;
 }
 
 int broiler_disk_image_init(struct broiler *broiler)

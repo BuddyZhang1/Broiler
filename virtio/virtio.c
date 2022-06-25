@@ -167,6 +167,68 @@ void virtio_notify_status(struct broiler *broiler,
 		vdev->ops->notify_status(broiler, dev, ext_status);
 }
 
+static inline bool virt_desc_test_flag(struct virt_queue *vq,
+					struct vring_desc *desc, u16 flag)
+{
+	return !!(virtio_guest_to_host_u16(vq, desc->flags) & flag);
+}
+
+/*
+ * Each buffer in the virtqueue is actually a chain of descriptors. This
+ * function returns the next descriptor in the chain, or max if we're
+ * at the end.
+ */
+static unsigned next_desc(struct virt_queue *vq, struct vring_desc *desc,
+		unsigned int i, unsigned int max)
+{
+	unsigned int next;
+
+	/* If this descriptor says it doesn't chain, we're done. */
+	if (!virt_desc_test_flag(vq, &desc[i], VRING_DESC_F_NEXT))
+		return max;
+
+	next = virtio_guest_to_host_u16(vq, desc[i].next);
+
+	/* Ensure they're not leading us off end of descriptors. */
+	return min(next, max);
+}
+
+u16 virt_queue_get_head_iov(struct virt_queue *vq, struct iovec iov[],
+			u16 *out, u16 *in, u16 head, struct broiler *broiler)
+{
+	struct vring_desc *desc;
+	u16 idx, max;
+
+	idx = head;
+	*out = *in = 0;
+	max = vq->vring.num;
+	desc = vq->vring.desc;
+
+	if (virt_desc_test_flag(vq, &desc[idx], VRING_DESC_F_INDIRECT)) {
+		max = virtio_guest_to_host_u32(vq, desc[idx].len) /
+					sizeof(struct vring_desc);
+		desc = gpa_flat_to_hva(broiler,
+			virtio_guest_to_host_u64(vq, desc[idx].addr));
+		idx = 0;
+	}
+
+	do {
+		/* Grab the first decripotr, and check it's OK. */
+		iov[*out + *in].iov_len =
+				virtio_guest_to_host_u32(vq, desc[idx].len);
+		iov[*out + *in].iov_base =
+				gpa_flat_to_hva(broiler,
+				virtio_guest_to_host_u64(vq, desc[idx].addr));
+		/* If this is an input descriptor, increment that count. */
+		if (virt_desc_test_flag(vq, &desc[idx], VRING_DESC_F_WRITE))
+			(*in)++;
+		else
+			(*out)++;
+	} while ((idx = next_desc(vq, desc, idx, max)) != max);
+
+	return head;
+}
+
 int virtio_init(struct broiler *broiler, void *dev,
 		struct virtio_device *vdev, struct virtio_ops *ops,
 		enum virtio_trans trans, int device_id,

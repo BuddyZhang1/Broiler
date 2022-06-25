@@ -32,6 +32,8 @@
 #define VIRTIO_STATUS_START		(1 << 8)
 /* Stop the device */
 #define VIRTIO_STATUS_STOP		(1 << 9)
+/* Initialize the config */
+#define VIRTIO_STATUS_CONFIG		(1 << 10)
 
 /*
  * Virtio IDs
@@ -102,6 +104,9 @@
 #define PCI_CLASS_9P				0xff0000
 #define PCI_CLASS_VSOCK				0xff0000
 
+/* VRING */
+
+#define vring_avail_event(vr)	(*(__virtio16 *)&(vr)->used->ring[(vr)->num])
 
 enum virtio_trans {
 	VIRTIO_PCI,
@@ -175,6 +180,44 @@ virtio_init_device_vq(struct virtio_device *vdev, struct virt_queue *vq)
 	vq->enabled = true;
 }
 
+static inline u16 virt_queue_pop(struct virt_queue *queue)
+{
+	u16 guest_idx;
+
+	/*
+	 * The guest updates the avail index after writing the ring entry.
+	 * Ensure that we read the updated entry once virt_queue_available()
+	 * observes the new index.
+	 */
+	rmb();
+
+	guest_idx = queue->vring.avail->ring[queue->last_avail_idx++ %
+							queue->vring.num];
+
+	return virtio_guest_to_host_u16(queue, guest_idx);
+}
+
+static inline bool virt_queue_available(struct virt_queue *vq)
+{
+	u16 last_avail_idx = virtio_host_to_guest_u16(vq, vq->last_avail_idx);
+
+	if (!vq->vring.avail)
+		return 0;
+
+	if (vq->use_event_idx) {
+		vring_avail_event(&vq->vring) = last_avail_idx;
+		/*
+		 * After the driver writes a new avail index, it reads the event
+		 * index to see if we need any notification. Ensure that it
+		 * reads the updated index, or else we'll miss the 
+		 * notification.
+		 */
+		mb();
+	}
+
+	return vq->vring.avail->idx != last_avail_idx;
+}
+
 /* VIRTIO-PCI */
 #define VIRTIO_PCI_MAX_VQ	32
 #define VIRTIO_PCI_MAX_CONFIG	1
@@ -239,6 +282,7 @@ struct blk_dev_req {
 	struct blk_dev			*bdev;
 	struct iovec			iov[VIRTIO_BLK_QUEUE_SIZE];
 	u16				out, in, head;
+	u8				*status;
 	struct broiler			*broiler;
 };
 
@@ -248,6 +292,7 @@ struct blk_dev {
 
 	struct virtio_device		vdev;
 	struct virtio_blk_config	blk_config;
+	u64				capacity;
 	struct disk_image		*disk;
 	u32				features;
 
@@ -281,5 +326,7 @@ extern struct vring_used_elem *virt_queue_set_used_elem(
 			struct virt_queue *queue, u32 head, u32 len);
 extern bool virtio_queue_should_signal(struct virt_queue *vq);
 extern int virtio_compat_add_message(const char *device, const char *config);
+extern u16 virt_queue_get_head_iov(struct virt_queue *vq, struct iovec iov[],
+		u16 *out, u16 *in, u16 head, struct broiler *broiler);
 
 #endif
