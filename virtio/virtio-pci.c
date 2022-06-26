@@ -98,7 +98,7 @@ static bool virtio_pci_specific_data_in(struct broiler *broiler,
 }
 
 static bool
-virtio_pci_data_in(struct kvm_cpu *vcpu, struct virtio_device *vdev,
+virtio_pci_data_in(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 				unsigned long offset, void *data, int size)
 {
 	struct virtio_pci *vpci;
@@ -286,7 +286,7 @@ static bool virtio_pci_specific_data_out(struct broiler *broiler,
 }
 
 static bool
-virtio_pci_data_out(struct kvm_cpu *vcpu, struct virtio_device *vdev,
+virtio_pci_data_out(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 				unsigned long offset, void *data, int size)
 {
 	struct virtio_pci *vpci;
@@ -324,7 +324,7 @@ virtio_pci_data_out(struct kvm_cpu *vcpu, struct virtio_device *vdev,
 	case VIRTIO_PCI_STATUS:
 		vpci->status = ioport_read8(data);
 		if (!vpci->status) /* Sample endianness on reset */
-			vdev->endian = kvm_cpu_get_endianness(vcpu);
+			vdev->endian = broiler_cpu_get_endianness(vcpu);
 		virtio_notify_status(broiler, vdev, vpci->data, vpci->status);
 		break;
 	default:
@@ -336,7 +336,7 @@ virtio_pci_data_out(struct kvm_cpu *vcpu, struct virtio_device *vdev,
 	return ret;
 }
 
-static void virtio_pci_io_mmio_callback(struct kvm_cpu *vcpu,
+static void virtio_pci_io_mmio_callback(struct broiler_cpu *vcpu,
 		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	struct virtio_device *vdev = ptr;
@@ -380,7 +380,7 @@ static void update_msix_map(struct virtio_pci *vpci,
 	irq_update_msix_route(vpci->broiler, gsi, &msix_entry->msg);
 }
 
-static void virtio_pci_msix_mmio_callback(struct kvm_cpu *vcpu,
+static void virtio_pci_msix_mmio_callback(struct broiler_cpu *vcpu,
 		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	struct virtio_device *vdev = ptr;

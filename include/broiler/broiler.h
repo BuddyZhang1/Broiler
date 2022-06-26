@@ -80,7 +80,7 @@ struct broiler {
 
 	/* CPU */
 	int nr_cpu;
-	struct kvm_cpu **cpus;
+	struct broiler_cpu **cpus;
 
 	/* Memory */
 	u64 ram_size;
@@ -129,6 +129,8 @@ extern int broiler_mptable_init(struct broiler *broiler);
 extern int broiler_mptable_exit(struct broiler *broiler);
 extern int broiler_threadpool_init(struct broiler *broiler);
 extern int broiler_threadpool_exit(struct broiler *broiler);
+extern int broiler_cpu_running(struct broiler *broiler);
+extern int broiler_cpu_exit(struct broiler *broiler);
 
 static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
 {

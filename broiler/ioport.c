@@ -11,7 +11,7 @@ static DEFINE_MUTEX(mmio_lock);
 static struct rb_root mmio_tree = RB_ROOT;
 static struct rb_root pio_tree = RB_ROOT;
 
-static void dummy_io(struct kvm_cpu *vcpu, u64 addr, 
+static void dummy_io(struct broiler_cpu *vcpu, u64 addr, 
 			u8 *data, u32 len, u8 is_write, void *ptr) { }
 
 static int mmio_insert(struct rb_root *root, struct mmio_mapping *data)
@@ -56,7 +56,7 @@ static bool ioport_is_mmio(unsigned int flags)
 
 /* The 'fast A20 gate' */
 
-static void ps2_control_io(struct kvm_cpu *vcpu, u64 addr, u8 *data,
+static void ps2_control_io(struct broiler_cpu *vcpu, u64 addr, u8 *data,
 				u32 len, u8 is_write, void *ptr)
 {
 	/* A20 is always enabled */
@@ -64,7 +64,7 @@ static void ps2_control_io(struct kvm_cpu *vcpu, u64 addr, u8 *data,
 		ioport_write8(data, 0x02);
 }
 
-static void debug_io(struct kvm_cpu *vcpu, u64 addr, u8 *data,
+static void debug_io(struct broiler_cpu *vcpu, u64 addr, u8 *data,
 				u32 len, u8 is_write, void *ptr) { }
 
 int broiler_ioport_register(struct broiler *broiler, u64 phys_addr,

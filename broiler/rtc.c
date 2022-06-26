@@ -5,7 +5,7 @@
 
 static struct rtc_device broiler_rtc;
 
-static void cmos_ram_io(struct kvm_cpu *vcpu, u64 addr, u8 *data,
+static void cmos_ram_io(struct broiler_cpu *vcpu, u64 addr, u8 *data,
                         u32 len, u8 is_write, void *ptr)
 {
 	struct tm *tm;

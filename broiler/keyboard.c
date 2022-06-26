@@ -204,7 +204,7 @@ static u8 kbd_read_data(void)
 	return ret;
 }
 
-static void kbd_io(struct kvm_cpu *vcpu, u64 addr, u8 *data, u32 len,
+static void kbd_io(struct broiler_cpu *vcpu, u64 addr, u8 *data, u32 len,
 				u8 is_write, void *ptr)
 {
 	u8 value;

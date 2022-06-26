@@ -6,7 +6,7 @@
 
 static int task_eventfd;
 
-static int kvm_cpu_set_lint(struct kvm_cpu *vcpu)
+static int broiler_cpu_set_lint(struct broiler_cpu *vcpu)
 {
 	struct local_apic lapic;
 
@@ -19,11 +19,11 @@ static int kvm_cpu_set_lint(struct kvm_cpu *vcpu)
 	return ioctl(vcpu->vcpu_fd, KVM_SET_LAPIC, &lapic);
 }
 
-static struct kvm_cpu *
-kvm_cpu_init(struct broiler *broiler, unsigned long cpu_id)
+static struct broiler_cpu *
+broiler_cpu_init_one(struct broiler *broiler, unsigned long cpu_id)
 {
 	int coalesced_offset;
-	struct kvm_cpu *vcpu;
+	struct broiler_cpu *vcpu;
 	int mmap_size;
 	int ret;
 
@@ -62,7 +62,7 @@ kvm_cpu_init(struct broiler *broiler, unsigned long cpu_id)
 		vcpu->ring = (void *)vcpu->kvm_run + 
 					(coalesced_offset * PAGE_SIZE);
 	
-	if (kvm_cpu_set_lint(vcpu)) {
+	if (broiler_cpu_set_lint(vcpu)) {
 		printf("KVM_SET_LAPIC failed.\n");
 		return NULL;
 	}
@@ -90,7 +90,7 @@ int broiler_cpu_init(struct broiler *broiler)
 	}
 
 	for (i = 0; i < broiler->nr_cpu; i++) {
-		broiler->cpus[i] = kvm_cpu_init(broiler, i);
+		broiler->cpus[i] = broiler_cpu_init_one(broiler, i);
 		if (!broiler->cpus[i]) {
 			printf("Unable to initialize VCPU.\n");
 			goto err_vcpu;

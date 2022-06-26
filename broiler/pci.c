@@ -352,7 +352,7 @@ void pci_config_rd(struct broiler *broiler,
 		memset(data, 0xff, size);
 }
 
-static void pci_config_data_mmio(struct kvm_cpu *vcpu, u64 addr,
+static void pci_config_data_mmio(struct broiler_cpu *vcpu, u64 addr,
 			u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	union pci_config_address pci_config_address;
@@ -384,7 +384,7 @@ static void *pci_config_address_ptr(u16 port)
 	return base + offset;
 }
 
-static void pci_config_address_mmio(struct kvm_cpu *vcpu, u64 addr,
+static void pci_config_address_mmio(struct broiler_cpu *vcpu, u64 addr,
 			u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	void *p = pci_config_address_ptr(addr);
@@ -395,7 +395,7 @@ static void pci_config_address_mmio(struct kvm_cpu *vcpu, u64 addr,
 		memcpy(data, p, len);
 }
 
-static void pci_config_mmio_access(struct kvm_cpu *vcpu, u64 addr,
+static void pci_config_mmio_access(struct broiler_cpu *vcpu, u64 addr,
 			u8 *data, u32 len, u8 is_write, void *broiler)
 {
 	union pci_config_address cfg_addr;

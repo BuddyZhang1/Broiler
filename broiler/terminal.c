@@ -295,7 +295,7 @@ static void term_sig_cleanup(int sig)
 }
 
 static bool serial8250_out(struct serial8250_device *dev,
-			struct kvm_cpu *vcpu, u16 offset, void *data)
+			struct broiler_cpu *vcpu, u16 offset, void *data)
 {
 	bool ret = true;
 	char *addr = data;
@@ -365,7 +365,7 @@ static bool serial8250_out(struct serial8250_device *dev,
 }
 
 static bool serial8250_in(struct serial8250_device *dev,
-		struct kvm_cpu *vcpu, u16 offset, void *data)
+		struct broiler_cpu *vcpu, u16 offset, void *data)
 {
 	bool ret = true;
 
@@ -413,7 +413,7 @@ static bool serial8250_in(struct serial8250_device *dev,
 	return ret;
 }
 
-static void serial8250_mmio(struct kvm_cpu *vcpu, u64 addr, u8 *data,
+static void serial8250_mmio(struct broiler_cpu *vcpu, u64 addr, u8 *data,
 		u32 len, u8 is_write, void *ptr)
 {
 	struct serial8250_device *dev = ptr;

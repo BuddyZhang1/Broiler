@@ -15,7 +15,7 @@
 #define IOPORT_BUS_MASK		0xf
 #define IOPORT_COALESCE		(1U << 4)
 
-typedef void (*mmio_handler_fn)(struct kvm_cpu *vcpu, u64 addr, 
+typedef void (*mmio_handler_fn)(struct broiler_cpu *vcpu, u64 addr, 
 				u8 *data, u32 len, u8 is_write, void *ptr);
 
 struct mmio_mapping {

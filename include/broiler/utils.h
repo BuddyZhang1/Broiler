@@ -3,6 +3,15 @@
 
 #include "broiler/broiler.h"
 
+#ifdef __GNUC__
+#define NORETURN __attribute__((__noreturn__))
+#else
+#define NORETURN
+#ifndef __attribute__
+#define __attribute__(x)
+#endif
+#endif
+
 static inline ssize_t get_iov_size(const struct iovec *iov, int iovcnt)
 {
 	size_t size = 0;
@@ -40,5 +49,7 @@ static inline int fls_long(unsigned long x)
 extern ssize_t broiler_pread(int, const struct iovec *, int, off_t);
 extern ssize_t broiler_pwrite(int, const struct iovec *, int, off_t);
 extern ssize_t read_in_full(int fd, void *buf, size_t count);
+extern void die(const char *err, ...);
+extern void die_perror(const char *s);
 
 #endif

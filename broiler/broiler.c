@@ -116,8 +116,17 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_threadpool;
 	}
 
+	/* KVM Running */
+	if (broiler_cpu_running(broiler) < 0) {
+		printf("Broiler running failed.\n");
+		ret = -errno;
+		goto err_running;
+	}
+
 	return 0;
 
+	broiler_cpu_exit(broiler);
+err_running:
 	broiler_threadpool_exit(broiler);
 err_threadpool:
 	broiler_mptable_exit(broiler);
