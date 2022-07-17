@@ -5,7 +5,7 @@ BiscuitOS Broiler
 
 BiscuitOS Broiler an X86 emulator and virtualizer. Run BiscuitOS Distro for Mainstram Linux on X86 Architecture. 
 
-[![jISi6g.md.png](https://s1.ax1x.com/2022/07/17/jISi6g.md.png)](https://imgtu.com/i/jISi6g)
+[![jIiwmF.md.png](https://s1.ax1x.com/2022/07/17/jIiwmF.md.png)](https://imgtu.com/i/jIiwmF)
 
 #### Physical Memory Space
 

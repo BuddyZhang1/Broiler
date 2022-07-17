@@ -19,6 +19,7 @@ BiscuitOS-Broiler-default
 # Ignore dirent
 
 include/broiler/bios-rom.h
+tags
 
 !.gitignore
 # output

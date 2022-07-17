@@ -44,6 +44,7 @@ static u32 get_host_features(struct broiler *broiler, void *dev)
 	       | 1UL << VIRTIO_BLK_F_FLUSH
 	       | 1UL << VIRTIO_RING_F_EVENT_IDX
 	       | 1UL << VIRTIO_RING_F_INDIRECT_DESC
+	       | 1UL << VIRTIO_F_ANY_LAYOUT
 	       | (bdev->disk->readonly ? 1UL << VIRTIO_BLK_F_RO : 0);
 }
 

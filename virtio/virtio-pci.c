@@ -123,22 +123,34 @@ virtio_pci_data_in(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 
 	switch (offset) {
 	case VIRTIO_PCI_HOST_FEATURES:
+		/* Bitmask of the features support by the host
+		 *  - virtio-blk: virtio_blk_ops */
 		val = vdev->ops->get_host_features(broiler, vpci->data);
 		ioport_write32(data, val);
 		break;
 	case VIRTIO_PCI_QUEUE_PFN:
+		/* PFN for the currently selected queue */
 		vq = vdev->ops->get_vq(broiler, vpci->data,
 						vpci->queue_selector);
 		ioport_write32(data, vq->pfn);
 		break;
 	case VIRTIO_PCI_QUEUE_NUM:
+		/* Queue size for the currently selected queue */
 		val = vdev->ops->get_size_vq(broiler, 
 					vpci->data, vpci->queue_selector);
 		ioport_write16(data, val);
 		break;
 	case VIRTIO_PCI_STATUS:
+		/* Device Status register */
+		ioport_write8(data, vpci->status);
+		break;
+	case VIRTIO_PCI_ISR:
+		/* Interrupt status register. Reading the value will return
+		 * the current contents of the ISR and will also clear it.
+		 * This is effectively a read-and-acknowledge. */
 		ioport_write8(data, vpci->isr);
-		broiler_irq_line(broiler, vpci->legacy_irq_line, VIRTIO_IRQ_LOW);
+		broiler_irq_line(broiler,
+				vpci->legacy_irq_line, VIRTIO_IRQ_LOW);
 		vpci->isr = VIRTIO_IRQ_LOW;
 		break;
 	default:
@@ -346,10 +358,10 @@ static void virtio_pci_io_mmio_callback(struct broiler_cpu *vcpu,
 	struct virtio_device *vdev = ptr;
 	struct virtio_pci *vpci = vdev->virtio;
 	u32 ioport_addr = virtio_pci_port_addr(vpci);
+	u32 ioport_end  = ioport_addr + pci_bar_size(&vpci->pdev, 0);
 	u32 base_addr;
 
-	if (addr >= ioport_addr &&
-		addr < ioport_addr + pci_bar_size(&vpci->pdev, 0))
+	if (addr >= ioport_addr && addr < ioport_end)
 		base_addr = ioport_addr;
 	else
 		base_addr = virtio_pci_mmio_addr(vpci);
