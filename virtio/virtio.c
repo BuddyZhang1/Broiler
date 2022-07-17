@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/virtio.h"
 #include "broiler/compat.h"
@@ -106,6 +107,45 @@ bool virtio_queue_should_signal(struct virt_queue *vq)
 		return true;
 	}
 	return false;
+}
+
+bool virtio_access_config(struct broiler *broiler, struct virtio_device *vdev,
+			  void *dev, unsigned long offset, void *data,
+			  size_t size, bool is_write)
+{
+	void *in, *out, *config;
+	size_t config_size = vdev->ops->get_config_size(broiler, dev);
+
+	if (offset + size > config_size) {
+		printf("Config access offset (%lu) is beyond config size "
+			"(%zu)\n", offset, config_size);
+        	return false;
+	}
+
+	config = vdev->ops->get_config(broiler, dev) + offset;
+
+	in = is_write ? data : config;
+	out = is_write ? config : data;
+
+	switch (size) {
+	case 1:
+		*(u8 *)out = *(u8 *)in;
+		break;
+	case 2:
+		*(u16 *)out = *(u16 *)in;
+		break;
+	case 4:
+		*(u32 *)out = *(u32 *)in;
+		break;
+	case 8:
+		*(u64 *)out = *(u64 *)in;
+		break;
+	default:
+		printf("%s: invalid access size\n", __func__);
+		return false;
+	}
+
+	return true;
 }
 
 int virtio_compat_add_message(const char *device, const char *config)
@@ -239,12 +279,14 @@ int virtio_init(struct broiler *broiler, void *dev,
 
 	switch (trans) {
 	case VIRTIO_PCI:
+		vdev->legacy		= true;
 		virtio = calloc(sizeof(struct virtio_pci), 1);
 		if (!virtio)
 			return -ENOMEM;
 		vdev->virtio		= virtio;
 		vdev->ops		= ops;
 		vdev->ops->signal_vq	= virtio_pci_signal_vq;
+		vdev->ops->signal_config = virtio_pci_signal_config;
 		vdev->ops->init		= virtio_pci_init;
 		vdev->ops->exit		= virtio_pci_exit;
 		vdev->ops->reset	= virtio_pci_reset;
@@ -252,6 +294,7 @@ int virtio_init(struct broiler *broiler, void *dev,
 				vdev, device_id, subsys_id, class);
 		break;
 	case VIRTIO_MMIO:
+		/* Don't supoort MMIO VIRTIO */
 		break;
 	default:
 		r = -1;
@@ -263,6 +306,7 @@ int virtio_init(struct broiler *broiler, void *dev,
 int broiler_virtio_init(struct broiler *broiler)
 {
 
+	/* virtio-blk */
 	virtio_blk_init(broiler);
 
 	return 0;

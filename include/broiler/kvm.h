@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_KVM_H
-#define _BISCUITOS_KVM_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_KVM_H
+#define _BROILER_KVM_H
 
 #include <stdbool.h>
 #include <pthread.h>
@@ -21,6 +22,8 @@
 #define SIG_BROILER_TASK	(SIGRTMIN + 2)
 
 #define MAX_KVM_CPUID_ENTRIES	100
+#define MAX_SYM_LEN		128
+#define SYMBOL_DEFAULT_UNKNOWN	"<unknown>"
 
 #define MSR_IA32_SYSENTER_CS	0x00000174
 #define MSR_IA32_SYSENTER_ESP	0x00000175
@@ -78,6 +81,27 @@
 #define KVM_EXIT_XEN			34
 #define KVM_EXIT_RISCV_SBI		35
 
+/* CPUID flags we need to deal with */
+#define KVM_X86_FEATURE_VMX		5 /* Hardware virtuallization */
+#define KVM_X86_FEATURE_SVM		2 /* Secure virtual machine */
+#define KVM_X86_FEATURE_XSAVE		26 /* XSAVE/XRSTOR/XSETBV/XGETBV */
+
+#define CPUID_VENDOR_INTEL_1		0x756e6547 /* "Genu" */
+#define CPUID_VENDOR_INTEL_2		0x49656e69 /* "ineI" */
+#define CPUID_VENDOR_INTEL_3		0x6c65746e /* "ntel" */
+
+#define CPUID_VENDOR_AMD_1		0x68747541 /* "Auth" */
+#define CPUID_VENDOR_AMD_2		0x69746e65 /* "enti" */
+#define CPUID_VENDOR_AMD_3		0x444d4163 /* "cAMD" */
+
+#define SIGBROILEREXIT			(SIGRTMIN + 0)
+#define SIGBROILERPAUSE			(SIGRTMIN + 1)
+#define SIGBROILERTASK			(SIGRTMIN + 2)
+
+#define DEFINE_KVM_EXT(ext)		\
+	.name = #ext,			\
+	.code = ext
+
 struct broiler_cpu {
 	pthread_t thread; /* VCPU thread */ 
 
@@ -106,11 +130,36 @@ struct broiler_cpu_task {
 	void *data;
 };
 
+struct kvm_ext {
+	const char *name;
+	int code;
+};
+
+struct cpuid_regs {
+	u32	eax;
+	u32	ebx;
+	u32	ecx;
+	u32	edx;
+};
+
+static inline void host_cpuid(struct cpuid_regs *regs)
+{               
+	asm volatile("cpuid"
+		   : "=a" (regs->eax),
+		     "=b" (regs->ebx),
+		     "=c" (regs->ecx),
+		     "=d" (regs->edx)
+		   : "0" (regs->eax), "2" (regs->ecx));
+}
+
 extern int kvm_init(struct broiler *broiler);
 extern void kvm_exit(struct broiler *broiler);
 extern bool kvm_support_extension(struct broiler *broiler,
 					unsigned int extension);
 extern void broiler_reboot(struct broiler *broiler);
 extern int __attribute__((weak)) broiler_cpu_get_endianness(struct broiler_cpu *);
+extern __thread struct broiler_cpu *current_broiler_cpu;
+extern void broiler_pause(struct broiler *broiler);
+extern void broiler_continue(struct broiler *broiler);
 
 #endif

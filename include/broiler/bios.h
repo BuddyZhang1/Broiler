@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_BIOS_H
-#define _BISCUITOS_BIOS_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_BIOS_H
+#define _BROILER_BIOS_H
 
 /*
  * X86-32 Memory Map (typical)
@@ -10,7 +11,8 @@
  * EBDA area                            0x0009FC00 0x0009FFFF
  * VIDEO RAM                            0x000A0000 0x000BFFFF
  * VIDEO ROM (BIOS)                     0x000C0000 0x000C7FFF
- * ROMs & unus. space (mapped hw & misc)0x000C8000 0x000EFFFF 160 KiB (typically)       
+ * ROMs & unus. space (mapped hw & misc)0x000C8000 0x000EFFFF
+ *							160 KiB (typically)
  * Motherboard BIOS                     0x000F0000 0x000FFFFF
  * Extended Memory                      0x00100000 0xFEBFFFFF
  * Reserved (configs, ACPI, PnP, etc)   0xFEC00000 0xFFFFFFFF
@@ -36,13 +38,20 @@
 #define VGA_ROM_BEGIN			0x000c0000
 #define VGA_ROM_END			0x000c7fff
 #define VGA_ROM_OEM_STRING		VGA_ROM_BEGIN
-#define VGA_ROM_OEM_STRING_SIZE		32
+#define VGA_ROM_OEM_STRING_SIZE		16
 #define VGA_ROM_MODES			(VGA_ROM_OEM_STRING + VGA_ROM_OEM_STRING_SIZE)
 #define VGA_ROM_MODES_SIZE		32
 
 /* real mode interrupt vector table */
 #define REAL_INTR_BASE			REAL_MODE_IVT_BEGIN
 #define REAL_INTR_VECTORS		256
+
+/*
+ * BIOS stack must be at absolute predefined memory address
+ * We reserve 64 bytes for BIOS stack
+ */
+#define BIOS_SS				0xfff7
+#define BIOS_SP				0x40
 
 /*
  * When interfere with assembler code we need to be sure how

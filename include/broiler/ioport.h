@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_IOPORT_H
-#define _BISCUITOS_IOPORT_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_IOPORT_H
+#define _BROILER_IOPORT_H
 
 #include "broiler/kvm.h"
 #include "broiler/device.h"
@@ -32,6 +33,10 @@ extern int broiler_ioport_register(struct broiler *broiler, u64 phys_addr,
 
 extern bool broiler_ioport_deregister(struct broiler *broiler,
                                 u64 phys_addr, unsigned int flags);
+extern bool broiler_cpu_emulate_io(struct broiler_cpu *vcpu, u16 port,
+			void *data, int direction, int size, u32 count);
+extern bool broiler_cpu_emulate_mmio(struct broiler_cpu *vcpu, u64 phys_addr,
+                                        u8 *data, u32 len, u8 is_write);
 
 static inline int
 broiler_register_pio(struct broiler *broiler, u16 port, u16 len,

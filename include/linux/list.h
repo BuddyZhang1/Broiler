@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_LIST_H
-#define _BISCUITOS_LIST_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_LIST_H
+#define _BROILER_LIST_H
 
 struct list_head {
 	struct list_head *next, *prev;

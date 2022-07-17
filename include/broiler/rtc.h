@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_RTC_H
-#define _BISCUITOS_RTC_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_RTC_H
+#define _BROILER_RTC_H
 
 #include "broiler/device.h"
 

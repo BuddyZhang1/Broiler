@@ -1,4 +1,4 @@
-
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/bios.h"
 #include "broiler/processor-flags.h"
 

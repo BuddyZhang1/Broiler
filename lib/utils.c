@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/utils.h"
 #include <stdarg.h>

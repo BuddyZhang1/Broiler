@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_BROILER_H
-#define _BISCUITOS_BROILER_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_BROILER_H
+#define _BROILER_BROILER_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,8 +19,13 @@
 #include "broiler/barrier.h"
 
 /* Memory layout */
+#define BROILER_32BIT_MAX_MEM_SIZE	(1ULL << 32)
+#define BROILER_32BIT_GAP_SIZE		(0x40000000)
+#define BROILER_32BIT_GAP_START		(BROILER_32BIT_MAX_MEM_SIZE - \
+						BROILER_32BIT_GAP_SIZE)
+
 #define BROILER_IOPORT_AREA	(0x000000000)
-#define BROILER_MMIO_START	(0xE0000000)
+#define BROILER_MMIO_START	BROILER_32BIT_GAP_START
 #define BROILER_PCI_CFG_AREA	(BROILER_MMIO_START + 0x1000000)
 #define BROILER_PCI_MMIO_AREA	(BROILER_MMIO_START + 0x2000000)
 
@@ -109,11 +115,16 @@ struct broiler {
 extern int broiler_base_init(struct broiler *broiler);
 extern int broiler_load_kernel(struct broiler *broiler);
 extern int broiler_setup_bios(struct broiler *broiler);
+extern int broiler_ipc_init(struct broiler *broiler);
+extern int broiler_ipc_exit(struct broiler *broiler);
 extern int ioeventfd_init(struct broiler *broiler);
 extern int ioeventfd_exit(struct broiler *broiler);
 extern int broiler_cpu_init(struct broiler *broiler);
+extern int broiler_cpu_exit(struct broiler *broiler);
 extern int broiler_irq_init(struct broiler *broiler);
+extern void broiler_irq_exit(struct broiler *broiler);
 extern int broiler_ioport_setup(struct broiler *broiler);
+extern void broiler_ioport_exit(struct broiler *broiler);
 extern int broiler_pci_init(struct broiler *broiler);
 extern int broiler_pci_exit(struct broiler *broiler);
 extern int broiler_disk_image_init(struct broiler *broiler);
@@ -132,17 +143,10 @@ extern int broiler_threadpool_exit(struct broiler *broiler);
 extern int broiler_cpu_running(struct broiler *broiler);
 extern int broiler_cpu_exit(struct broiler *broiler);
 
-static inline void *gpa_flat_to_hva(struct broiler *broiler, u64 offset)
+static inline bool hva_ptr_in_ram(struct broiler *broiler, void *p)
 {
-	return broiler->hva_start + offset;
-}
-
-static inline void *gpa_real_to_hva(struct broiler *broiler, u16 selector,
-                                        u16 offset)
-{
-	unsigned long flat = ((u32)selector << 4) + offset;
-
-	return gpa_flat_to_hva(broiler, flat);
+	return broiler->hva_start <= p &&
+		p < (broiler->hva_start + broiler->ram_size);
 }
 
 #endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,9 +9,15 @@
 
 #include "broiler/broiler.h"
 #include "broiler/kvm.h"
+#include "broiler/memory.h"
+#include "broiler/utils.h"
 
 static const char *BZIMAGE_MAGIC = "HdrS";
 
+/*
+ * See Documentation/x86/boot.txt for details no bzImage
+ * on-disk and memory layout.
+ */
 int broiler_load_kernel(struct broiler *broiler)
 {
 	struct boot_params boot, *kern_boot;
@@ -28,9 +35,9 @@ int broiler_load_kernel(struct broiler *broiler)
 		goto err_open_kernel;
 	}
 
-	/* Read boot params header */
+	/* Read bzImage boot params header */
 	if (read(kernel_fd, &boot, sizeof(boot)) != sizeof(boot)) {
-		printf("Unable to read boot_params.\n");
+		printf("Unable to read bzImage boot_params.\n");
 		ret = -errno;
 		goto err_read_boot_params;
 	}
@@ -57,7 +64,7 @@ int broiler_load_kernel(struct broiler *broiler)
 	/* Kernel bootloader: setup */
 	file_size = (boot.hdr.setup_sects + 1) << 9;
 	p = gpa_real_to_hva(broiler, BOOT_LOADER_SELECTOR, BOOT_LOADER_IP);
-	if (read(kernel_fd, p, file_size) != file_size) {
+	if (read_in_full(kernel_fd, p, file_size) != file_size) {
 		printf("Kernel Setup read failed.\n");
 		ret = -errno;
 		goto err_setup;
@@ -65,9 +72,8 @@ int broiler_load_kernel(struct broiler *broiler)
 
 	/* Load actual kernel image (vmlinux.bin) to BZ_KERNEL_START */
 	p = gpa_flat_to_hva(broiler, BZ_KERNEL_START);
-	file_size = read(kernel_fd, p, broiler->ram_size - BZ_KERNEL_START);
-	if (file_size < 0) {
-		printf("Kernel read failed.\n");
+	if (read_file(kernel_fd, p, broiler->ram_size - BZ_KERNEL_START) < 0) {
+		printf("Kernel vmlinux read failed.\n");
 		ret = -errno;
 		goto err_load_kernel;
 	}
@@ -88,12 +94,15 @@ int broiler_load_kernel(struct broiler *broiler)
 	kern_boot->hdr.loadflags	|= CAN_USE_HEAP;
 	kern_boot->hdr.vid_mode		= 0;
 
+	/*
+	 * The real-mode setup code starts at offset 0x200 of a bzImage.
+	 * See Documentation/x86/boot.txt for details.
+	 */
 	broiler->boot_selector = BOOT_LOADER_SELECTOR;
 	broiler->boot_ip = BOOT_LOADER_IP + 0x200;
 	broiler->boot_sp = BOOT_LOADER_SP;
 
 	close(kernel_fd);
-
 	return 0;
 
 err_load_kernel:

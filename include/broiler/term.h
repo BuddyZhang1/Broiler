@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_TERM_H
-#define _BISCUITOS_TERM_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_TERM_H
+#define _BROILER_TERM_H
 
 #include "broiler/broiler.h"
 #include "broiler/device.h"

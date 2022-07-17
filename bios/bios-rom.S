@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/assembly.h"
 
 	.org 0
@@ -10,3 +11,8 @@
 GLOBAL(bios_rom)
 	.incbin "bios/bios.bin"
 END(bios_rom)
+
+/*
+ * Add this section to ensure final binary has a non-executable stack.
+ */
+.section .note.GNU-stack,"",@progbits

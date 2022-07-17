@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/virtio.h"
 #include "broiler/disk.h"
@@ -292,10 +293,7 @@ static int virtio_blk_init_one(struct broiler *broiler, struct disk_image *disk)
 
 	*bdev = (struct blk_dev) {
 		.disk			= disk,
-		.blk_config		= (struct virtio_blk_config) {
-			.capacity	= disk->size / SECTOR_SIZE,
-			.seg_max	= DISK_SEG_MAX,
-		},
+		.capacity		= disk->size / SECTOR_SIZE,
 		.broiler		= broiler,
 	};
 	list_add_tail(&bdev->list, &broiler_bdevs);

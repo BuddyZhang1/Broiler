@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_DEVICE_H
-#define _BISCUITOS_DEVICE_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_DEVICE_H
+#define _BROILER_DEVICE_H
 
 #include "linux/rbtree.h"
 

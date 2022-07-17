@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_E820_H
-#define _BISCUITOS_E820_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_E820_H
+#define _BROILER_E820_H
 
 #include "broiler/types.h"
 

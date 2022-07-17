@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_IOEVENTFD_H
-#define _BISCUITOS_IOEVENTFD_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_IOEVENTFD_H
+#define _BROILER_IOEVENTFD_H
 
 #include "broiler/broiler.h"
 #include "linux/list.h"
@@ -7,6 +8,7 @@
 #define IOEVENTFD_FLAG_PIO		(1 << 0)
 #define IOEVENTFD_FLAG_USER_POLL	(1 << 1)
 #define KVM_IOEVENTFD_HAS_PIO		1
+#define IOEVENTFD_MAX_EVENTS		20
 
 struct ioevent {
 	u64		io_addr;

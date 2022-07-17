@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_VIRTIO_H
-#define _BISCUITOS_VIRTIO_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_VIRTIO_H
+#define _BROILER_VIRTIO_H
 
 #include <linux/virtio_blk.h>
 #include <linux/virtio_ring.h>
@@ -11,6 +12,7 @@
 #include "broiler/pci.h"
 #include "broiler/device.h"
 #include "broiler/utils.h"
+#include "broiler/memory.h"
 
 #define VIRTIO_ENDIAN_LE	(1 << 0)
 #define VIRTIO_ENDIAN_HOST	VIRTIO_ENDIAN_LE
@@ -116,6 +118,7 @@ enum virtio_trans {
 #define VIRTIO_DEFAULT_TRANS(broiler)	VIRTIO_PCI
 
 struct virtio_device {
+	bool				legacy;
 	bool				use_vhost;
 	void				*virtio;
 	struct virtio_ops		*ops;
@@ -126,6 +129,7 @@ struct virtio_device {
 
 struct virtio_ops {
 	u8 *(*get_config)(struct broiler *broiler, void *dev);
+	size_t (*get_config_size)(struct broiler *broiler, void *dev);
 	u32 (*get_host_features)(struct broiler *broiler, void *dev);
 	void (*set_guest_features)(struct broiler *broiler, void *dev, u32 features);
 	int (*get_vq_count)(struct broiler *broiler, void *dev);
@@ -328,5 +332,10 @@ extern bool virtio_queue_should_signal(struct virt_queue *vq);
 extern int virtio_compat_add_message(const char *device, const char *config);
 extern u16 virt_queue_get_head_iov(struct virt_queue *vq, struct iovec iov[],
 		u16 *out, u16 *in, u16 head, struct broiler *broiler);
+extern int virtio_pci_signal_config(struct broiler *broiler,
+                                        struct virtio_device *vdev);
+extern bool virtio_access_config(struct broiler *broiler, struct virtio_device *vdev,
+			void *dev, unsigned long offset, void *data,
+			size_t size, bool is_write);
 
 #endif

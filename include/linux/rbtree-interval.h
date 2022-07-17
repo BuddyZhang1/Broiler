@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #ifndef KVM__INTERVAL_RBTREE_H
 #define KVM__INTERVAL_RBTREE_H
 

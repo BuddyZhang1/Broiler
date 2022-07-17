@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_DISK_H
-#define _BISCUITOS_DISK_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_DISK_H
+#define _BROILER_DISK_H
 
 #include <sys/stat.h>
 #include <sys/uio.h>

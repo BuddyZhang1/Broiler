@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/bios.h"
 #include "broiler/mptable.h"
@@ -5,6 +6,7 @@
 #include "broiler/apic.h"
 #include "broiler/device.h"
 #include "broiler/pci.h"
+#include "broiler/memory.h"
 
 static unsigned int gen_cpu_flag(unsigned int cpu, unsigned int ncpu)
 {

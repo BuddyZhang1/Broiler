@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #ifndef _BROILER_APIC_H
 #define _BROILER_APIC_H
+
+#include "broiler/apicdef.h"
 
 /*
  * APIC, IOAPIC stuff
  */
-#define IO_APIC_DEFAULT_PHYS_BASE	0xfec00000
-#define APIC_DEFAULT_PHYS_BASE		0xfee00000
 #define APIC_BASE_ADDR_STEP		0x00400000
 #define IOAPIC_BASE_ADDR_STEP		0x00100000
 

@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_IRQ_H
-#define _BISCUITOS_IRQ_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_IRQ_H
+#define _BROILER_IRQ_H
 
 #include <linux/kvm.h>
 #include "broiler/broiler.h"

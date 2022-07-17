@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_ERR_H
-#define _BISCUITOS_ERR_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_ERR_H
+#define _BROILER_ERR_H
 
 #define __used		__attribute__((__unused__))
 #define __packed	__attribute__((packed))

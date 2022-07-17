@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/irq.h"
 #include "broiler/kvm.h"
@@ -197,7 +198,7 @@ int broiler_irq_init(struct broiler *broiler)
 				KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_MASTER, i);
 
 	/* Hook next 8 GSIs to slave IRQCHIP */
-	for (i = 0; i < 24; i++)
+	for (i = 0; i < 16; i++)
 		irq_add_routing(i, 
 			KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_SLAVE, i - 8);
 
@@ -220,3 +221,5 @@ int broiler_irq_init(struct broiler *broiler)
 
 	return 0;
 }
+
+void broiler_irq_exit(struct broiler *broiler) { }

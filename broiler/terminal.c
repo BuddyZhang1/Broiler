@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/term.h"
 #include "broiler/ioport.h"
@@ -273,7 +274,6 @@ static void *term_poll_thread_loop(void *param)
 			break;
 		serial8250_update_consoles(broiler);
 		/* wait virtio-serial inject interrupt */
-		;
 	}
 	printf("term_poll_thread_loop: error polling device fds %d\n", errno);
 	return NULL;
@@ -509,10 +509,8 @@ int broiler_terminal_init(struct broiler *broiler)
 
 	/* Use our own blocking thread to read stdin, don't require a tick */
 	if (pthread_create(&term_poll_thread, NULL,
-					term_poll_thread_loop, broiler)) {
-		printf("Unable to create console input poll thread\n");
-		exit(1);
-	}
+					term_poll_thread_loop, broiler))
+		die("Unable to create console input poll thread\n");
 
 	signal(SIGTERM, term_sig_cleanup);
 	atexit(term_cleanup);

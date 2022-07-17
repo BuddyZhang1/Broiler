@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/bios.h"
 #include "broiler/e820.h"
 #include "broiler/processor-flags.h"
@@ -23,7 +24,7 @@ static inline u8 rdfs8(unsigned long addr)
 
 	asm volatile("addr32 movb %%fs:%1,%0" : "=q" (v) : "m" (*(u8 *)addr));
 
-	return v;     
+	return v;
 }
 
 static inline u32 rdfs32(unsigned long addr)

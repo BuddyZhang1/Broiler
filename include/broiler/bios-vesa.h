@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_BIOS_VESA_H
-#define _BISCUITOS_BIOS_VESA_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_BIOS_VESA_H
+#define _BROILER_BIOS_VESA_H
 
 typedef struct {
 	u16 off, seg;

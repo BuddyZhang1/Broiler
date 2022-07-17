@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_ASSEMBLY_H
-#define _BISCUITOS_ASSEMBLY_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_ASSEMBLY_H
+#define _BROILER_ASSEMBLY_H
 
 #define __ALIGN .p2align 4, 0x90
 #define ENTRY(name)     \
@@ -21,4 +22,4 @@
  */
 #define IRET	.byte 0xcf
 
-#endif /* BISCUITOS_ASSEMBLY_H */
+#endif /* BROILER_ASSEMBLY_H */

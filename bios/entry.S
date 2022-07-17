@@ -1,5 +1,6 @@
-
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/assembly.h"
+#include "broiler/bios.h"
 
 	.org 0
 	.code16gcc
@@ -29,7 +30,7 @@
 	popl    %ecx
 	popl    %edx
 	popl    %esp
-	popl   	 %ebp
+	popl   	%ebp
 	popl    %esi
 	popl    %edi
 	popl    %ds
@@ -80,3 +81,14 @@ ENTRY(bios_int15)
 
 	IRET
 ENTRY_END(bios_int15)
+
+GLOBAL(__locals)
+
+#include "local.S"
+
+END(__locals)
+
+/*
+ * Add this section to ensure final binary has a non-executable stack.
+ */
+.section .note.GNU-stack,"",@progbits

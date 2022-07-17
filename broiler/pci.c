@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/ioport.h"
 #include "broiler/pci.h"
@@ -111,7 +112,7 @@ static int pci_deactivate_bar(struct broiler *broiler,
 		printf("Error deactivating emulation for BAR %d\n", bar);
 		goto out;
 	}
-	pdev->bar_active[bar] = true;
+	pdev->bar_active[bar] = false;
 
 out:
 	return r;
@@ -426,6 +427,7 @@ int pci_register_bar_regions(struct broiler *broiler, struct pci_device *pdev,
 	for (i = 0; i < 6; i++) {
 		if (!pci_bar_is_implemented(pdev, i))
 			continue;
+
 		if (pci_bar_is_active(pdev, i))
 			continue;
 
@@ -443,6 +445,7 @@ int pci_register_bar_regions(struct broiler *broiler, struct pci_device *pdev,
 				return r;
 		}
 	}
+
 	return 0;
 }
 

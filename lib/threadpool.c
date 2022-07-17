@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/threadpool.h"
 #include "linux/mutex.h"
 #include <sys/prctl.h>

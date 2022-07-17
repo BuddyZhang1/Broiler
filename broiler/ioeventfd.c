@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -14,9 +15,7 @@
 #include "broiler/kvm.h"
 #include "broiler/ioeventfd.h"
 
-#define IOEVENTFD_MAX_EVENTS	20
-
-static struct epoll_event events[IOEVENTFD_MAX_EVENTS];
+static struct epoll_event broiler_events[IOEVENTFD_MAX_EVENTS];
 static bool ioeventfd_avail;
 static int epoll_fd, epoll_stop_fd;
 static LIST_HEAD(used_ioevents);
@@ -25,19 +24,20 @@ static void *ioeventfd_thread(void *param)
 {
 	u64 tmp = 1;
 
-	prctl(PR_SET_NAME, "BiscuitOS-ioeventfd-worker");
+	prctl(PR_SET_NAME, "Broiler-ioeventfd-worker");
 
 	for (;;) {
 		int nfds, i;
 
-		nfds = epoll_wait(epoll_fd, events, IOEVENTFD_MAX_EVENTS, -1);
+		nfds = epoll_wait(epoll_fd, broiler_events,
+						IOEVENTFD_MAX_EVENTS, -1);
 		for (i = 0; i < nfds; i++) {
 			struct ioevent *ioevent;
 
-			if (events[i].data.fd == epoll_stop_fd)
+			if (broiler_events[i].data.fd == epoll_stop_fd)
 				goto done;
 
-			ioevent = events[i].data.ptr;
+			ioevent = broiler_events[i].data.ptr;
 
 			if (read(ioevent->fd, &tmp, sizeof(tmp)) < 0) {
 				printf("Failed reading event.\n");

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * handy BIOS macros
  */
@@ -9,9 +10,9 @@
 	movw %ss, %cs:(__CALLER_SS)
 	movl %esp, %cs:(__CALLER_SP)
 	movl %edx, %cs:(__CALLER_CLOBBER)
-	movw $MB_BIOS_SS, %dx
+	movw $BIOS_SS, %dx
 	movw %dx, %ss
-	movw $MB_BIOS_SP, %sp
+	movw $BIOS_SP, %sp
 	movl %cs:(__CALLER_CLOBBER), %edx
 .endm
 

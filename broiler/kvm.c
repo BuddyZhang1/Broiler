@@ -1,11 +1,51 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/virtio.h"
 #include "broiler/kvm.h"
 #include "broiler/utils.h"
+#include "broiler/err.h"
+#include "broiler/ioport.h"
+#include "broiler/memory.h"
+#include <sys/eventfd.h>
 #include <sys/prctl.h>
 #include <signal.h>
-#include <sys/mman.h>
 #include <limits.h>
+
+#define DEFINE_BROILER_EXIT_REASON(reason) [reason] = #reason
+
+const char *broiler_exit_reasons[] = {
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_UNKNOWN),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_EXCEPTION),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_IO),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_HYPERCALL),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_DEBUG),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_HLT),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_MMIO),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_IRQ_WINDOW_OPEN),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_SHUTDOWN),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_FAIL_ENTRY),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_INTR),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_SET_TPR),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_TPR_ACCESS),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_S390_SIEIC),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_S390_RESET),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_DCR),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_NMI),
+	DEFINE_BROILER_EXIT_REASON(KVM_EXIT_INTERNAL_ERROR),
+};
+
+struct kvm_ext kvm_req_ext[] = {
+	{ DEFINE_KVM_EXT(KVM_CAP_COALESCED_MMIO) },
+	{ DEFINE_KVM_EXT(KVM_CAP_SET_TSS_ADDR) },
+	{ DEFINE_KVM_EXT(KVM_CAP_PIT2) },
+	{ DEFINE_KVM_EXT(KVM_CAP_USER_MEMORY) },
+	{ DEFINE_KVM_EXT(KVM_CAP_IRQ_ROUTING) },
+	{ DEFINE_KVM_EXT(KVM_CAP_IRQCHIP) },
+	{ DEFINE_KVM_EXT(KVM_CAP_HLT) },
+	{ DEFINE_KVM_EXT(KVM_CAP_IRQ_INJECT_STATUS) },
+	{ DEFINE_KVM_EXT(KVM_CAP_EXT_CPUID) },
+	{ 0, 0 }
+};
 
 static int pause_event;
 static DEFINE_MUTEX(pause_lock);
@@ -18,6 +58,43 @@ bool kvm_support_extension(struct broiler *broiler, unsigned int extension)
 	return true;
 }
 
+static int kvm_check_extensions(struct broiler *broiler)
+{
+	int i;
+
+	for (i = 0; ; i++) {
+		if (!kvm_req_ext[i].name)
+			break;
+		if (!kvm_support_extension(broiler, kvm_req_ext[i].code)) {
+			printf("Unsupport KVM extension: %s\n",
+						kvm_req_ext[i].name);
+			return -i;
+		}
+	}
+	return 0;
+}
+
+static inline bool is_in_protected_mode(struct broiler_cpu *vcpu)
+{
+	return vcpu->sregs.cr0 & 0x01;
+}
+
+static inline u64 ip_to_flat(struct broiler_cpu *vcpu, u64 ip)
+{
+	u64 cs;
+
+	/*
+	 * NOTE! We should take code segment base address into account here.
+	 * Luckily it's usually zero because Linux uses flat memory model.
+	 */
+	if (is_in_protected_mode(vcpu))
+		return ip;
+
+	cs = vcpu->sregs.cs.selector;
+
+	return ip + (cs << 4);
+}
+
 int __attribute__((weak)) broiler_cpu_get_endianness(struct broiler_cpu *vcpu)
 {
 	return VIRTIO_ENDIAN_HOST;
@@ -26,7 +103,15 @@ int __attribute__((weak)) broiler_cpu_get_endianness(struct broiler_cpu *vcpu)
 void broiler_reboot(struct broiler *broiler)
 {
 	/* Check if the guest is running */
-	printf("Broiler Reboot!\n");
+	if (!broiler->cpus[0] || broiler->cpus[0]->thread == 0)
+		return;
+
+	pthread_kill(broiler->cpus[0]->thread, SIGBROILEREXIT);
+}
+
+static bool broiler_cpu_handle_exit(struct broiler_cpu *vcpu)
+{
+	return false;
 }
 
 static void broiler_notify_paused(void)
@@ -120,12 +205,230 @@ static void filter_cpuid(struct kvm_cpuid2 *broiler_cpuid, int cpu_id)
 	}
 }
 
+void broiler_continue(struct broiler *broiler)
+{
+	mutex_unlock(&pause_lock);
+}
+
+void broiler_pause(struct broiler *broiler)
+{
+	int i, paused_vcpus = 0;
+
+	mutex_lock(&pause_lock);
+
+	/* Check if the guest is running */
+	if (!broiler->cpus || !broiler->cpus[0] ||
+					broiler->cpus[0]->thread == 0)
+		return;
+
+	pause_event = eventfd(0, 0);
+	if (pause_event < 0)
+		die("Failed creating pause notification event");
+	for (i = 0; i < broiler->nr_cpu; i++) {
+		if (broiler->cpus[i]->is_running &&
+					broiler->cpus[i]->paused == 0)
+			pthread_kill(broiler->cpus[i]->thread,
+							SIGBROILERPAUSE);
+		else
+			paused_vcpus++;
+	}
+
+	while (paused_vcpus < broiler->nr_cpu) {
+		u64 cur_read;
+
+		if (read(pause_event, &cur_read, sizeof(cur_read)) < 0)
+			die("Failed reading pause event");
+		paused_vcpus += cur_read;
+	}
+	close(pause_event);
+}
+
+static void print_dtable(const char *name, struct kvm_dtable *dtable)
+{               
+	dprintf(STDOUT_FILENO, " %s                 %016llx  %08hx\n",
+		name, (u64) dtable->base, (u16) dtable->limit);
+}
+
+static void print_segment(const char *name, struct kvm_segment *seg)
+{
+	dprintf(STDOUT_FILENO, " %s       %04hx      %016llx  %08x  %02hhx"
+			  "    %x %x   %x  %x %x %x %x\n",
+			name, (u16) seg->selector, (u64) seg->base,
+			(u32) seg->limit, (u8) seg->type, seg->present,
+			seg->dpl, seg->db, seg->s, seg->l, seg->g, seg->avl);
+}
+
+static void broiler_cpu_dump_registers(struct broiler_cpu *vcpu)
+{
+	unsigned long cr0, cr2, cr3;
+	unsigned long cr4, cr8;
+	unsigned long rax, rbx, rcx;
+	unsigned long rdx, rsi, rdi;
+	unsigned long rbp,  r8,  r9;
+	unsigned long r10, r11, r12;
+	unsigned long r13, r14, r15;
+	unsigned long rip, rsp;
+	struct kvm_sregs sregs;
+	unsigned long rflags;
+	struct kvm_regs regs;
+	int debug_fd = STDOUT_FILENO;
+	int i;
+
+	if (ioctl(vcpu->vcpu_fd, KVM_GET_REGS, &regs) < 0)
+		die("KVM_GET_REGS failed");
+
+	rflags = regs.rflags;
+
+	rip = regs.rip; rsp = regs.rsp;
+	rax = regs.rax; rbx = regs.rbx; rcx = regs.rcx;
+	rdx = regs.rdx; rsi = regs.rsi; rdi = regs.rdi;
+	rbp = regs.rbp; r8  = regs.r8;  r9  = regs.r9;
+	r10 = regs.r10; r11 = regs.r11; r12 = regs.r12;
+	r13 = regs.r13; r14 = regs.r14; r15 = regs.r15;
+
+	dprintf(debug_fd, "\n Registers:\n");
+	dprintf(debug_fd,   " ----------\n");
+	dprintf(debug_fd, " rip: %016lx   rsp: %016lx flags: %016lx\n",
+							rip, rsp, rflags);
+	dprintf(debug_fd, " rax: %016lx   rbx: %016lx   rcx: %016lx\n",
+							rax, rbx, rcx);
+	dprintf(debug_fd, " rdx: %016lx   rsi: %016lx   rdi: %016lx\n",
+							rdx, rsi, rdi);
+	dprintf(debug_fd, " rbp: %016lx    r8: %016lx    r9: %016lx\n",
+							rbp, r8,  r9);
+	dprintf(debug_fd, " r10: %016lx   r11: %016lx   r12: %016lx\n",
+							r10, r11, r12);
+	dprintf(debug_fd, " r13: %016lx   r14: %016lx   r15: %016lx\n",
+							r13, r14, r15);
+
+	if (ioctl(vcpu->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
+		die("KVM_GET_REGS failed");
+
+	cr0 = sregs.cr0; cr2 = sregs.cr2; cr3 = sregs.cr3;
+	cr4 = sregs.cr4; cr8 = sregs.cr8;
+
+	dprintf(debug_fd, " cr0: %016lx   cr2: %016lx   cr3: %016lx\n", cr0, cr2, cr3);
+	dprintf(debug_fd, " cr4: %016lx   cr8: %016lx\n", cr4, cr8);
+	dprintf(debug_fd, "\n Segment registers:\n");
+	dprintf(debug_fd,   " ------------------\n");
+	dprintf(debug_fd, " register  selector  base              limit     type  p dpl db s l g avl\n");
+	print_segment("cs ", &sregs.cs);
+	print_segment("ss ", &sregs.ss);
+	print_segment("ds ", &sregs.ds);
+	print_segment("es ", &sregs.es);
+	print_segment("fs ", &sregs.fs);
+	print_segment("gs ", &sregs.gs);
+	print_segment("tr ", &sregs.tr);
+	print_segment("ldt", &sregs.ldt);
+	print_dtable("gdt", &sregs.gdt);
+	print_dtable("idt", &sregs.idt);
+
+	dprintf(debug_fd, "\n APIC:\n");
+	dprintf(debug_fd,   " -----\n");
+	dprintf(debug_fd, " efer: %016llx  apic base: %016llx  nmi: %s\n",
+			(u64) sregs.efer, (u64) sregs.apic_base,
+			(vcpu->broiler->nmi_disabled ? "disabled" : "enabled"));
+
+	dprintf(debug_fd, "\n Interrupt bitmap:\n");
+	dprintf(debug_fd,   " -----------------\n");
+	for (i = 0; i < (KVM_NR_INTERRUPTS + 63) / 64; i++)
+		dprintf(debug_fd, " %016llx", (u64) sregs.interrupt_bitmap[i]);
+	dprintf(debug_fd, "\n");
+}
+
+static void broiler_dump_memory(struct broiler *broiler,
+		unsigned long addr, unsigned long size, int debug_fd)
+{
+	unsigned char *p;
+	unsigned long n;
+
+	size &= ~7; /* mod 8 */
+	if (!size)      
+		return;    
+
+	p = gpa_flat_to_hva(broiler, addr);
+
+	for (n = 0; n < size; n += 8) {
+		if (!hva_ptr_in_ram(broiler, p + n)) {
+			dprintf(debug_fd, " 0x%08lx: <unknown>\n", addr + n);
+			continue;
+		}
+		dprintf(debug_fd, " 0x%08lx: %02x %02x %02x %02x  "
+				  "%02x %02x %02x %02x\n",
+			addr + n, p[n + 0], p[n + 1], p[n + 2], p[n + 3],
+			p[n + 4], p[n + 5], p[n + 6], p[n + 7]);
+	}
+}
+
+static inline char *
+symbol_lookup(struct broiler *kvm, unsigned long addr, char *sym, size_t size)
+{               
+	char *s = strncpy(sym, SYMBOL_DEFAULT_UNKNOWN, size);
+
+	sym[size - 1] = '\0';
+	return s;
+}
+
+static void broiler_cpu_dump_code(struct broiler_cpu *vcpu)
+{
+	unsigned int code_bytes = 64;
+	unsigned int code_prologue = 43;
+	unsigned int code_len = code_bytes;
+	char sym[MAX_SYM_LEN] = SYMBOL_DEFAULT_UNKNOWN, *psym;
+	int debug_fd = STDOUT_FILENO;
+	unsigned char c;
+	unsigned int i;
+	u8 *ip;
+
+	if (ioctl(vcpu->vcpu_fd, KVM_GET_REGS, &vcpu->regs) < 0)
+		die("KVM_GET_REGS failed");
+
+	if (ioctl(vcpu->vcpu_fd, KVM_GET_SREGS, &vcpu->sregs) < 0)
+		die("KVM_GET_SREGS failed");
+
+	ip = gpa_flat_to_hva(vcpu->broiler,
+			ip_to_flat(vcpu, vcpu->regs.rip) - code_prologue);
+
+	dprintf(debug_fd, "\n Code:\n");
+	dprintf(debug_fd,   " -----\n");
+
+	psym = symbol_lookup(vcpu->broiler, vcpu->regs.rip, sym, MAX_SYM_LEN);
+	if (IS_ERR(psym))
+		dprintf(debug_fd,
+			"Warning: symbol_lookup() failed to find symbol "
+			"with error: %ld\n", PTR_ERR(psym));
+
+	dprintf(debug_fd, " rip: [<%016lx>] %s\n\n",
+				(unsigned long) vcpu->regs.rip, sym);
+
+	for (i = 0; i < code_len; i++, ip++) {
+		if (!hva_ptr_in_ram(vcpu->broiler, ip))
+			break;
+
+		c = *ip;
+
+		if (ip == gpa_flat_to_hva(vcpu->broiler,
+					ip_to_flat(vcpu, vcpu->regs.rip)))
+			dprintf(debug_fd, " <%02x>", c);
+		else
+			dprintf(debug_fd, " %02x", c);
+	}
+
+	dprintf(debug_fd, "\n");
+
+	dprintf(debug_fd, "\n Stack:\n");
+	dprintf(debug_fd,   " ------\n");
+	dprintf(debug_fd, " rsp: [<%016lx>] \n",
+				(unsigned long) vcpu->regs.rsp);
+	broiler_dump_memory(vcpu->broiler, vcpu->regs.rsp, 32, debug_fd);
+}
+
 static void broiler_cpu_setup_cpuid(struct broiler_cpu *vcpu)
 {
 	struct kvm_cpuid2 *broiler_cpuid;
 
 	broiler_cpuid = calloc(1, sizeof(*broiler_cpuid) +
-			MAX_KVM_CPUID_ENTRIES * sizeof(*broiler_cpuid->entries));
+		MAX_KVM_CPUID_ENTRIES * sizeof(*broiler_cpuid->entries));
 	broiler_cpuid->nent = MAX_KVM_CPUID_ENTRIES;
 
 	if (ioctl(vcpu->broiler->kvm_fd, 
@@ -138,6 +441,24 @@ static void broiler_cpu_setup_cpuid(struct broiler_cpu *vcpu)
 		die_perror("KVM_SET_CPUID2 failed");
 
 	free(broiler_cpuid);
+}
+
+static void broiler_cpu_handle_coalesced_mmio(struct broiler_cpu *cpu)
+{
+	if (cpu->ring) {
+		while (cpu->ring->first != cpu->ring->last) {
+			struct kvm_coalesced_mmio *m;
+
+			m = &cpu->ring->coalesced_mmio[cpu->ring->first];
+			broiler_cpu_emulate_mmio(cpu,
+						 m->phys_addr,
+						 m->data,
+						 m->len,
+						 1);
+			cpu->ring->first = (cpu->ring->first + 1) %
+						KVM_COALESCED_MMIO_MAX;
+		}
+	}
 }
 
 static inline u32 selector_to_base(u16 selector)
@@ -199,8 +520,10 @@ static void broiler_cpu_setup_msrs(struct broiler_cpu *vcpu)
 {
 	unsigned long ndx = 0;
 
-	vcpu->msrs = calloc(1, sizeof(struct broiler_cpu) +
+	vcpu->msrs = calloc(1, sizeof(struct kvm_msrs) +
 			      (sizeof(struct kvm_msr_entry) * 100));
+	if (!vcpu->msrs)
+		die("out of memory on msrs");
 
 	vcpu->msrs->entries[ndx++] =
 			BROILER_MSR_ENTRY(MSR_IA32_SYSENTER_CS, 0x00);
@@ -261,8 +584,20 @@ static void broiler_cpu_run(struct broiler_cpu *vcpu)
 		die_perror("KVM_RUN failed");
 }
 
+static void broiler_cpu_enable_singlestep(struct broiler_cpu *vcpu)
+{
+	struct kvm_guest_debug debug = {
+		.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP,
+	};
+
+	if (ioctl(vcpu->vcpu_fd, KVM_SET_GUEST_DEBUG, &debug) < 0)
+		die("KVM_SET_GUEST_DEBUG failed");
+}
+
 static int broiler_cpu_start(struct broiler_cpu *cpu)
 {
+	int count = 0;
+
 	sigset_t sigset;
 
 	sigemptyset(&sigset);
@@ -280,16 +615,69 @@ static int broiler_cpu_start(struct broiler_cpu *cpu)
 		/* KVM RUN */
 		broiler_cpu_run(cpu);
 
-		printf("REASONE: %d\n", cpu->kvm_run->exit_reason);
 		switch (cpu->kvm_run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
+			printf("TRACE EXIT UNKNOW.\n");
 			break;	
-		default:
-			return 1;
+		case KVM_EXIT_IO : {
+			bool ret;
+
+			ret = broiler_cpu_emulate_io(cpu,
+						 cpu->kvm_run->io.port,
+						 (u8 *)cpu->kvm_run +
+						 cpu->kvm_run->io.data_offset,
+						 cpu->kvm_run->io.direction,
+						 cpu->kvm_run->io.size,
+						 cpu->kvm_run->io.count);
+			if (!ret)
+				goto panic_broiler;
+			break;
 		}
+		case KVM_EXIT_MMIO: {
+			bool ret;
+
+			/*
+			 * If we had MMIO exit, coalesced ring should be
+			 * processed *before* processing the exit itself
+			 */
+			broiler_cpu_handle_coalesced_mmio(cpu);
+
+			ret = broiler_cpu_emulate_mmio(cpu,
+						cpu->kvm_run->mmio.phys_addr,
+						cpu->kvm_run->mmio.data,
+						cpu->kvm_run->mmio.len,
+						cpu->kvm_run->mmio.is_write);
+			if (!ret)
+				goto panic_broiler;
+			break;
+		}
+		case KVM_EXIT_INTR:
+			printf("TRACE EXIT INTR\n");
+			goto exit_broiler;
+		case KVM_EXIT_SHUTDOWN:
+			printf("TRACE EXIT SHUTDOWN\n");
+			goto exit_broiler;
+		case KVM_EXIT_SYSTEM_EVENT:
+			printf("TRACE EXIT SYSTEM EVENT.\n");
+			break;
+		default: {
+			bool ret;
+
+			printf("EIXT REASON %d\n", cpu->kvm_run->exit_reason);
+			ret = broiler_cpu_handle_exit(cpu);
+			if (!ret)
+				goto panic_broiler;
+			break;
+		}
+		} /* END of switch*/
+		broiler_cpu_handle_coalesced_mmio(cpu);
 	}
 
+exit_broiler:
 	return 0;
+
+panic_broiler:
+	return 1;
 }
 
 static void *broiler_cpu_thread(void *arg)
@@ -306,6 +694,16 @@ static void *broiler_cpu_thread(void *arg)
 	return (void *)(intptr_t) 0;
 
 panic_broiler:
+	fprintf(stderr, "*************** Broiler CoreDump ***************\n\n");
+	fprintf(stderr, "Broiler exit reason: %u (\"%s\")\n",
+		current_broiler_cpu->kvm_run->exit_reason,
+	broiler_exit_reasons[current_broiler_cpu->kvm_run->exit_reason]);
+	if (current_broiler_cpu->kvm_run->exit_reason ==
+						KVM_EXIT_UNKNOWN)
+		fprintf(stderr, "Broiler exit reason: 0x%llu\n",
+			(unsigned long long)current_broiler_cpu->kvm_run->hw.hardware_exit_reason);
+	broiler_cpu_dump_registers(current_broiler_cpu);
+	broiler_cpu_dump_code(current_broiler_cpu);	
 
 	return (void *)(intptr_t) 1;
 }
@@ -317,7 +715,7 @@ int broiler_cpu_running(struct broiler *broiler)
 	for (i = 0; i < broiler->nr_cpu; i++) {
 		if (pthread_create(&broiler->cpus[i]->thread, NULL,
 				broiler_cpu_thread, broiler->cpus[i]) != 0)
-			printf("Unable to create KVM VCPU thread");
+			die("Unable to create KVM VCPU thread");
 	}
 
 	/* Only VCPU #0 is going to exit by itself when shutting down */
@@ -327,21 +725,63 @@ int broiler_cpu_running(struct broiler *broiler)
 	return 0;
 }
 
-int broiler_cpu_exit(struct broiler *broiler)
+bool kvm_support_vm(void)
 {
-	return 0;
+	struct cpuid_regs regs;
+	u32 eax_base;
+	int feature;
+
+	regs = (struct cpuid_regs) {
+		.eax		= 0x00,
+	};
+	host_cpuid(&regs);
+
+	switch (regs.ebx) {
+	case CPUID_VENDOR_INTEL_1:
+		eax_base	= 0x00;
+		feature		= KVM_X86_FEATURE_VMX;
+		break;
+	case CPUID_VENDOR_AMD_1:
+		eax_base	= 0x80000000;
+		feature		= KVM_X86_FEATURE_SVM;
+		break;
+	default:
+		return false;
+	}
+
+	regs = (struct cpuid_regs) {
+		.eax		= eax_base,
+	};
+	host_cpuid(&regs);
+
+	if (regs.eax < eax_base + 0x01)
+		return false;
+
+	regs = (struct cpuid_regs) {
+		.eax		= eax_base + 0x01,
+	};
+	host_cpuid(&regs);
+
+	return regs.ecx & (1 << feature);
 }
 
 int kvm_init(struct broiler *broiler)
 {
+	struct kvm_pit_config pit_config = { .flags = 0, };
 	struct kvm_userspace_memory_region mem;
 	int ret;
+
+	if (kvm_support_vm() < 0) {
+		printf("Machine doestn't VM, V-T/V-D enable?\n");
+		ret = -ENOSYS;
+		goto err_support;
+	}
 
 	/* Open KVM */
 	broiler->kvm_fd = open("/dev/kvm", O_RDWR);
 	if (broiler->kvm_fd < 0) {
 		printf("/dev/kvm doesn't exist\n");
-		ret = -errno;
+		ret = -ENODEV;
 		goto err_open_kvm;
 	}
 
@@ -361,47 +801,40 @@ int kvm_init(struct broiler *broiler)
 		goto err_create_vm;
 	}
 	
+	/* Check KVM extensions */
+	if (kvm_check_extensions(broiler) < 0) {
+		printf("KVM donesn't support extensions.\n");
+		ret = -errno;
+		goto err_check_extensions;
+	}
+
 	/* Set TSS */
-	ret = ioctl(broiler->vm_fd, KVM_SET_TSS_ADDR, 0xFFFBD000);
-	if (ret < 0) {
+	if (ioctl(broiler->vm_fd, KVM_SET_TSS_ADDR, 0xFFFBD000) < 0) {
 		printf("KVM_SET_TSS_ADDR error.\n");
 		ret = -errno;
 		goto err_set_tss;
 	}
 
-	/* Alloc HVA */
-	broiler->hva_start = mmap(NULL, broiler->ram_size,
-				  PROT_READ | PROT_WRITE,
-				  MAP_PRIVATE | MAP_ANONYMOUS |
-				  MAP_NORESERVE,
-				  -1, 0);
-	if (broiler->hva_start == MAP_FAILED) {
-		printf("HVA alloc failed.\n");
+	/* Set PIT2 */
+	if (ioctl(broiler->vm_fd, KVM_CREATE_PIT2, &pit_config) < 0) {
+		printf("KVM_CREATE_PIT2 error.\n");
 		ret = -errno;
-		goto err_hva_alloc;
+		goto err_set_pit2;
 	}
 
-	/* KVM create memory slot */
-	mem = (struct kvm_userspace_memory_region) {
-		.slot			= 0,
-		.flags			= 0,
-		.guest_phys_addr	= 0,
-		.memory_size		= broiler->ram_size,
-		.userspace_addr		= (unsigned long)broiler->hva_start,
-	};
-	ret = ioctl(broiler->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem);
-	if (ret < 0) {
+	/* Memory */
+	if (broiler_memory_init(broiler) < 0) {
+		printf("Broiler Memory init failed.\n");
 		ret = -errno;
-		goto err_memslot;
+		goto err_memory;
 	}
 
 	/* PCI Region */
 	broiler->pci_base = mem.guest_phys_addr + mem.memory_size;
 
 	/* IRQ */
-	ret = ioctl(broiler->vm_fd, KVM_CREATE_IRQCHIP);
-	if (ret < 0) {
-		printf("KVM_CREATE_IRQCHIP\n");
+	if (ioctl(broiler->vm_fd, KVM_CREATE_IRQCHIP) < 0) {
+		printf("KVM_CREATE_IRQCHIP failed\n");
 		ret = -errno;
 		goto err_create_irqchip;
 	}
@@ -409,18 +842,21 @@ int kvm_init(struct broiler *broiler)
 	return 0;
 
 err_create_irqchip:
-err_memslot:
-	munmap(broiler->hva_start, broiler->ram_size);
-err_hva_alloc:
+	broiler_memory_exit(broiler);
+err_memory:
+err_set_pit2:
 err_set_tss:
+err_check_extensions:
 err_create_vm:
 err_kvm_version:
 	close(broiler->kvm_fd);
 err_open_kvm:
+err_support:
 	return ret;
 }
 
 void kvm_exit(struct broiler *broiler)
 {
-
+	broiler_memory_exit(broiler);
+	close(broiler->kvm_fd);
 }

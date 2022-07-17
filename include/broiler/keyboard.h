@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_KEYBOARD_H
-#define _BISCUITOS_KEYBOARD_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_KEYBOARD_H
+#define _BROILER_KEYBOARD_H
 
 #include "broiler/broiler.h"
 

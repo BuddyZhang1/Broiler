@@ -1,10 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <sys/mman.h>
 #include <sys/eventfd.h>
 
 #include "broiler/broiler.h"
 #include "broiler/apicdef.h"
+#include "broiler/utils.h"
 
 static int task_eventfd;
+
+static void broiler_cpu_delete(struct broiler_cpu *vcpu)
+{
+	if (vcpu->msrs)
+		free(vcpu->msrs);
+	free(vcpu);
+}
 
 static int broiler_cpu_set_lint(struct broiler_cpu *vcpu)
 {
@@ -22,8 +31,8 @@ static int broiler_cpu_set_lint(struct broiler_cpu *vcpu)
 static struct broiler_cpu *
 broiler_cpu_init_one(struct broiler *broiler, unsigned long cpu_id)
 {
-	int coalesced_offset;
 	struct broiler_cpu *vcpu;
+	int coalesced_offset;
 	int mmap_size;
 	int ret;
 
@@ -31,7 +40,6 @@ broiler_cpu_init_one(struct broiler *broiler, unsigned long cpu_id)
 	if (!vcpu)
 		return NULL;
 	vcpu->broiler = broiler;
-
 	vcpu->cpu_id = cpu_id;
 
 	vcpu->vcpu_fd = ioctl(broiler->vm_fd, KVM_CREATE_VCPU, cpu_id);
@@ -103,4 +111,31 @@ err_vcpu:
 	for (i = 0; i < broiler->nr_cpu; i++)
 		free(broiler->cpus[i]);
 	return -ENOMEM;
+}
+
+int broiler_cpu_exit(struct broiler *broiler)
+{
+	void *ret = NULL;
+	int i, r;
+
+	broiler_cpu_delete(broiler->cpus[0]);
+	broiler->cpus[0] = NULL;
+
+	broiler_pause(broiler);
+	for (i = 0; i < broiler->nr_cpu; i++) {
+		if (broiler->cpus[i]->is_running) {
+			pthread_kill(broiler->cpus[i]->thread, SIGBROILEREXIT);
+			if (pthread_join(broiler->cpus[i]->thread, &ret) != 0)
+				die("pthread_join");
+			broiler_cpu_delete(broiler->cpus[i]);
+		}
+		if (ret == NULL)
+			r = 0;
+	}
+	broiler_continue(broiler);
+	free(broiler->cpus);
+	broiler->nr_cpu = 0;
+	close(task_eventfd);
+
+	return r;
 }

@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_APICDEF_H
-#define _BISCUITOS_APICDEF_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_APICDEF_H
+#define _BROILER_APICDEF_H
 
 /*
  * Constants for various Intel APICs. (local APIC, IOAPIC, etc.)
@@ -442,4 +443,4 @@ enum ioapic_irq_destination_types {
 	dest_ExtINT		= 7
 };
 
-#endif /* _BISCUITOS_APICDEF_H */
+#endif /* _BROILER_APICDEF_H */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,13 @@ int broiler_base_init(struct broiler *broiler)
 		printf("Load BIOS failed.\n");
 		ret = -errno;
 		goto err_bios_setup;
+	}
+
+	/* IPC */
+	if (broiler_ipc_init(broiler) < 0) {
+		printf("IPC initialize failed.\n");
+		ret = -errno;
+		goto err_ipc;
 	}
 
 	/* IOEVENTFD */
@@ -142,11 +150,16 @@ err_keyboard:
 err_rootfs:
 	broiler_pci_exit(broiler);
 err_pci:
+	broiler_ioport_exit(broiler);
 err_ioport:
+	broiler_irq_exit(broiler);
 err_irq:
+	broiler_cpu_exit(broiler);
 err_cpu:
 	ioeventfd_exit(broiler);
 err_ioeventfd:
+	broiler_ipc_exit(broiler);
+err_ipc:
 err_bios_setup:
 err_load_kernel:
 	kvm_exit(broiler);

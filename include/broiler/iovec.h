@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #ifndef _BROILER_IOVEC_H
 #define _BROILER_IOVEC_H
 

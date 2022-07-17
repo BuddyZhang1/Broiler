@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,7 @@
 #include "broiler/bios-export.h"
 #include "broiler/e820.h"
 #include "broiler/kvm.h"
+#include "broiler/memory.h"
 #include "broiler/bios-rom.h"
 #include "broiler/bios-interrupt.h"
 
@@ -75,11 +77,26 @@ static void e820_setup(struct broiler *broiler)
 		.type		= E820_RESERVED,
 	};
 
-	entry[i++] = (struct e820_entry) {
-		.addr		= BZ_KERNEL_START,
-		.size		= broiler->ram_size - BZ_KERNEL_START,
-		.type		= E820_RAM,
-	};
+	if (broiler->ram_size < BROILER_32BIT_GAP_START) {
+		entry[i++] = (struct e820_entry) {
+			.addr		= BZ_KERNEL_START,
+			.size		= broiler->ram_size - BZ_KERNEL_START,
+			.type		= E820_RAM,
+		};
+	} else {
+		entry[i++] = (struct e820_entry) {
+			.addr		= BZ_KERNEL_START,
+			.size		= BROILER_32BIT_GAP_START - 
+						BZ_KERNEL_START,
+			.type		= E820_RAM,
+		};
+		entry[i++] = (struct e820_entry) {
+			.addr		= BROILER_32BIT_MAX_MEM_SIZE,
+			.size		= broiler->ram_size -
+						BROILER_32BIT_MAX_MEM_SIZE,
+			.type		= E820_RAM,
+		};
+	}
 
 	table->nr_map = i;
 }
@@ -91,7 +108,7 @@ static void setup_vga_rom(struct broiler *broiler)
 
 	p = gpa_flat_to_hva(broiler, VGA_ROM_OEM_STRING);
 	memset(p, 0, VGA_ROM_OEM_STRING_SIZE);
-	strncpy(p, "BiscuitOS Brioler VESA", VGA_ROM_OEM_STRING_SIZE);
+	strncpy(p, "Broiler VESA", VGA_ROM_OEM_STRING_SIZE);
 
 	mode = gpa_flat_to_hva(broiler, VGA_ROM_MODES);
 	mode[0] = 0x0112;

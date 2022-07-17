@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/virtio.h"
 #include "broiler/irq.h"
@@ -46,6 +47,7 @@ int virtio_pci_signal_vq(struct broiler *broiler,
 	struct virtio_pci *vpci = vdev->virtio;
 	int tbl = vpci->vq_vector[vq];
 
+	printf("TRACE %s\n", __func__);
 	if (virtio_pci_msix_enabled(vpci) && tbl != VIRTIO_MSI_NO_VECTOR) {
 		if (vpci->pdev.msix.ctrl & PCI_MSIX_FLAGS_MASKALL ||
 			vpci->msix_table[tbl].ctrl &
@@ -64,6 +66,15 @@ int virtio_pci_signal_vq(struct broiler *broiler,
 		broiler_irq_line(broiler,
 				vpci->legacy_irq_line, VIRTIO_IRQ_HIGH);
 	}
+	return 0;
+}
+
+int virtio_pci_signal_config(struct broiler *broiler,
+					struct virtio_device *vdev)
+{
+	struct virtio_pci *vpci = vdev->virtio;
+
+	printf("TRace %s\n", __func__);
 	return 0;
 }
 
@@ -212,6 +223,29 @@ virtio_pci_exit_vq(struct broiler *broiler, struct virtio_device *vdev, int vq)
 	virtio_exit_vq(broiler, vdev, vpci->data, vq);
 }
 
+static int virtio_pci_add_msix_route(struct virtio_pci *vpci, u32 vec)
+{
+	struct msi_msg *msg;
+	int gsi;
+
+	if (vec == VIRTIO_MSI_NO_VECTOR)
+		return -EINVAL;
+
+	msg = &vpci->msix_table[vec].msg;
+	gsi = irq_add_msix_route(vpci->broiler, msg, vpci->dev.dev_num << 3);
+	/*
+	 * We don't need IRQ routing if we can use
+	 * MSI injection via the KVM_SIGNAL_MSI ioctl.
+	 */
+	if (gsi == -ENXIO && vpci->features & VIRTIO_PCI_F_SIGNAL_MSI)
+		return gsi;
+
+	if (gsi < 0)
+		die("XXXfailed to configure MSIs");
+
+	return gsi;
+}
+
 static bool virtio_pci_specific_data_out(struct broiler *broiler,
 	struct virtio_device *vdev, void *data, int size, unsigned long offset)
 {
@@ -225,24 +259,10 @@ static bool virtio_pci_specific_data_out(struct broiler *broiler,
 		switch (offset) {
 		case VIRTIO_MSI_CONFIG_VECTOR:
 			vec = vpci->config_vector = ioport_read16(data);
-			if (vec == VIRTIO_MSI_NO_VECTOR)
-				break;
 
-			gsi = irq_add_msix_route(broiler,
-						&vpci->msix_table[vec].msg,
-						vpci->dev.dev_num << 3);
-			/*
-			 * We don't need IRQ routing if we can use
-			 * MSI injection via the KVM_SIGNAL_MSI ioctl
-			 */
-			if (gsi == -ENXIO &&
-				vpci->features & VIRTIO_PCI_F_SIGNAL_MSI)
+			gsi = virtio_pci_add_msix_route(vpci, vec);
+			if (gsi < 0)
 				break;
-
-			if (gsi < 0) {
-				printf("faied to configure MSIs.\n");
-				break;
-			}
 
 			vpci->config_gsi = gsi;
 			break;
@@ -250,37 +270,21 @@ static bool virtio_pci_specific_data_out(struct broiler *broiler,
 			vec = ioport_read16(data);
 			vpci->vq_vector[vpci->queue_selector] = vec;
 
-			if (vec == VIRTIO_MSI_NO_VECTOR)
+			gsi = virtio_pci_add_msix_route(vpci, vec);
+			if (gsi < 0)
 				break;
-
-			gsi = irq_add_msix_route(broiler,
-					&vpci->msix_table[vec].msg,
-					vpci->dev.dev_num << 3);
-			/*
-			 * We don't need IRQ routing if we can use
-			 * MSI injection via the KVM_SIGNAL_MSI ioctl.
-			 */
-			if (gsi == -ENXIO &&
-				vpci->features & VIRTIO_PCI_F_SIGNAL_MSI)
-				break;
-
-			if (gsi < 0) {
-				printf("failed to configure MSIs\n");
-				break;
-			}
 
 			vpci->gsis[vpci->queue_selector] = gsi;
 			if (vdev->ops->notify_vq_gsi)
-				vdev->ops->notify_vq_gsi(broiler,
-					vpci->data,
-					vpci->queue_selector, gsi);
+				vdev->ops->notify_vq_gsi(broiler, vpci->data,
+						vpci->queue_selector, gsi);
 			break;
 		}
+
 		return true;
 	} else if (type == VIRTIO_PCI_O_CONFIG) {
-		vdev->ops->get_config(broiler, vpci->data)[config_offset] =
-								*(u8 *)data;
-		return true; 
+		return virtio_access_config(broiler,
+			vdev, vpci->data, config_offset, data, size, true); 
 	}
 	return false;
 }
@@ -457,9 +461,10 @@ static int virtio_pci_bar_deactivate(struct broiler *broiler,
 	int r = -EINVAL;
 
 	bar_addr = pci_bar_address(pdev, bar);
+
 	switch (bar) {
 	case 0:
-		broiler_deregister_pio(broiler, bar_addr);
+		r = broiler_deregister_pio(broiler, bar_addr);
 		break;
 	case 1:
 	case 2:
@@ -509,7 +514,7 @@ int virtio_pci_init(struct broiler *broiler, void *dev,
 						PCI_BASE_ADDRESS_SPACE_MEMORY,
 		.status			= PCI_STATUS_CAP_LIST,
 		.capabilities		= (void *)&vpci->pdev.msix -
-					  (void *)&vpci->pdev,
+					  		(void *)&vpci->pdev,
 		.bar_size[0]		= PCI_IO_SIZE,
 		.bar_size[1]		= PCI_IO_SIZE,
 		.bar_size[2]		= VIRTIO_MSIX_BAR_SIZE,
@@ -565,6 +570,7 @@ int virtio_pci_reset(struct broiler *broiler, struct virtio_device *vdev)
 	struct virtio_pci *vpci = vdev->virtio;
 	int vq;
 
+	printf("Trace %s\n", __func__);
 	for (vq = 0; vq < vdev->ops->get_vq_count(broiler, vpci->data); vq++)
 		virtio_pci_exit_vq(broiler, vdev, vq);
 
@@ -575,6 +581,7 @@ int virtio_pci_exit(struct broiler *broiler, struct virtio_device *vdev)
 {
 	struct virtio_pci *vpci = vdev->virtio;
 
+	printf("Trace %s\n", __func__);
 	virtio_pci_reset(broiler, vdev);
 	broiler_ioport_deregister(broiler,
 			virtio_pci_mmio_addr(vpci), DEVICE_BUS_MMIO);

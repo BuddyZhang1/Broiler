@@ -1,4 +1,4 @@
-
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/kvm.h"
 #include "broiler/ioport.h"
@@ -92,7 +92,8 @@ int broiler_ioport_register(struct broiler *broiler, u64 phys_addr,
 			.addr = phys_addr,
 			.size = phys_addr_len,
 		};
-		if (ioctl(broiler->vm_fd, KVM_REGISTER_COALESCED_MMIO, &zone)) {
+		if (ioctl(broiler->vm_fd,
+				KVM_REGISTER_COALESCED_MMIO, &zone) < 0) {
 			free(mmio);
 			return -errno;
 		}
@@ -107,6 +108,82 @@ int broiler_ioport_register(struct broiler *broiler, u64 phys_addr,
 
 	return 0;
 
+}
+
+static struct mmio_mapping *
+mmio_search(struct rb_root *root, u64 addr, u64 len)
+{
+	struct rb_int_node *node;
+
+	/* If len is zero or if there's an overflow, the MMIO op is invalid */
+	if (addr + len <= addr)
+		return NULL;
+
+	node = rb_int_search_range(root, addr, addr + len);
+	if (node == NULL)
+		return NULL;
+
+	return mmio_node(node);
+}
+
+static struct mmio_mapping *mmio_get(struct rb_root *root, 
+					u64 phys_addr, u32 len)
+{
+	struct mmio_mapping *mmio;
+
+	mutex_lock(&mmio_lock);
+	mmio = mmio_search(root, phys_addr, len);
+	if (mmio)
+		mmio->refcount++;
+	mutex_unlock(&mmio_lock);
+
+	return mmio;
+}
+
+static void mmio_put(struct broiler *broiler, struct rb_root *root,
+				struct mmio_mapping *mmio)
+{
+	mutex_lock(&mmio_lock);
+	mmio->refcount--;
+	if (mmio->remove && mmio->refcount == 0)
+		mmio_deregister(broiler, root, mmio);
+	mutex_unlock(&mmio_lock);
+}
+
+bool broiler_cpu_emulate_mmio(struct broiler_cpu *vcpu, u64 phys_addr,
+					u8 *data, u32 len, u8 is_write)
+{
+	struct mmio_mapping *mmio;
+
+	mmio = mmio_get(&mmio_tree, phys_addr, len);
+	if (!mmio)
+		goto out;
+
+	mmio->mmio_fn(vcpu, phys_addr, data, len, is_write, mmio->ptr);
+	mmio_put(vcpu->broiler, &mmio_tree, mmio);
+out:
+	return true;
+}
+
+bool broiler_cpu_emulate_io(struct broiler_cpu *vcpu, u16 port, void *data,
+				int direction, int size, u32 count)
+{
+	struct mmio_mapping *mmio;
+	bool is_write = direction == KVM_EXIT_IO_OUT;
+
+	mmio = mmio_get(&pio_tree, port, size);
+	if (!mmio)
+		return true;
+
+	while (count--) {
+		mmio->mmio_fn(vcpu, port, data, size, is_write, mmio->ptr);
+
+		data += size;
+	}
+
+	mmio_put(vcpu->broiler, &pio_tree, mmio);
+
+	return true;
 }
 
 bool broiler_ioport_deregister(struct broiler *broiler,
@@ -231,3 +308,5 @@ int broiler_ioport_setup(struct broiler *broiler)
 
 	return 0;
 }
+
+void broiler_ioport_exit(struct broiler *broiler) { }

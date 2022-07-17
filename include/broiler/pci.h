@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_PCI_H
-#define _BISCUITOS_PCI_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_PCI_H
+#define _BROILER_PCI_H
 
 #include <linux/pci_regs.h>
 #include "broiler/irq.h"

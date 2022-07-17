@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include "broiler/broiler.h"
 #include "broiler/device.h"
 #include "broiler/ioport.h"
@@ -17,6 +18,7 @@ static void cmos_ram_io(struct broiler_cpu *vcpu, u64 addr, u8 *data,
 
 			vcpu->broiler->nmi_disabled = value & (1UL << 7);
 			broiler_rtc.cmos_idx = value & ~(1UL << 7);
+
 			return;
 		}
 

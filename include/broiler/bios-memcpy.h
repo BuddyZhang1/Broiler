@@ -1,5 +1,6 @@
-#ifndef _BISCUITOS_BIOS_MEMCPY_H
-#define _BISCUITOS_BIOS_MEMCPY_H
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _BROILER_BIOS_MEMCPY_H
+#define _BROILER_BIOS_MEMCPY_H
 
 #include "broiler/types.h"
 #include <stddef.h>
