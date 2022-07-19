@@ -8,21 +8,21 @@ broiler_pread(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 	ssize_t nr;
 
 restart:
-	nr = pread(fd, (void *)iov, iovcnt, offset);
+	nr = preadv(fd, iov, iovcnt, offset);
 	if ((nr < 0) && ((errno == EAGAIN) || (errno == EINTR)))
 		goto restart;
 
 	return nr;
 }
 
-/* Same as pwrite(2) except that this function never returns EAGAIN or EINTR */
+/* Same as pwritev(2) except that this function never returns EAGAIN or EINTR */
 ssize_t
 broiler_pwrite(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
 	ssize_t nr;
 
 restart:
-	nr = pwrite(fd, iov, iovcnt, offset);
+	nr = pwritev(fd, iov, iovcnt, offset);
 	if ((nr < 0) && ((errno == EAGAIN) || (errno == EINTR)))
 		goto restart;
 

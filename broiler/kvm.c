@@ -161,6 +161,27 @@ static void filter_cpuid(struct kvm_cpuid2 *broiler_cpuid, int cpu_id)
 		struct kvm_cpuid_entry2 *entry = &broiler_cpuid->entries[i];
 
 		switch (entry->function) {
+		case 0:
+			/* BiscuitOS */
+			entry->ebx = 0x63736942; /* Bisc */
+			entry->edx = 0x4F746975; /* uitO */
+			entry->ecx = 0x53; /* S */ 
+			break;
+		case 0x80000002: /* Broiler@16th Gen Intel(R) @ 5.50GHz*/
+			entry->eax = 0x696F7242; /* Broi */
+			entry->ebx = 0x4072656C; /* ler@ */
+			entry->ecx = 0x68743631; /* 16th */
+			entry->edx = 0x65705320; /*  Spe */
+			break;
+		case 0x80000003:
+			entry->eax = 0x746E4920; /*  Int */
+			entry->ebx = 0x52286C65; /* el(R */
+			entry->ecx = 0x20402029; /* ) @ */
+			entry->edx = 0x30352E35; /* 5.50 */
+			break;
+		case 0x80000004:
+			entry->eax = 0x7A4847; /* GHz */
+			break;
 		case 1:
 			entry->ebx & ~(0xff << 24);
 			entry->ebx |= cpu_id << 24;

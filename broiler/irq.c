@@ -2,6 +2,7 @@
 #include "broiler/broiler.h"
 #include "broiler/irq.h"
 #include "broiler/kvm.h"
+#include "broiler/utils.h"
 
 #define IRQCHIP_MASTER		0
 #define IRQCHIP_SLAVE		1
@@ -22,10 +23,8 @@ void broiler_irq_line(struct broiler *broiler, int irq, int level)
 		.level = level,
 	};
 
-	if (ioctl(broiler->vm_fd, KVM_IRQ_LINE, &irq_level) < 0) {
-		printf("KVM_IRQ_LINE failed.\n");
-		exit(1);
-	}
+	if (ioctl(broiler->vm_fd, KVM_IRQ_LINE, &irq_level) < 0)
+		die("KVM_IRQ_LINE failed.");
 }
 
 void broiler_irq_trigger(struct broiler *broiler, int irq)
@@ -83,6 +82,7 @@ static bool update_data(u32 *ptr, u32 newdata)
 {
 	if (*ptr == newdata)
 		return false;
+
 	*ptr = newdata;
 	return true;
 }
@@ -198,7 +198,7 @@ int broiler_irq_init(struct broiler *broiler)
 				KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_MASTER, i);
 
 	/* Hook next 8 GSIs to slave IRQCHIP */
-	for (i = 0; i < 16; i++)
+	for (i = 8; i < 16; i++)
 		irq_add_routing(i, 
 			KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_SLAVE, i - 8);
 

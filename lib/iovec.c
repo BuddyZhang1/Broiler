@@ -12,7 +12,7 @@ ssize_t memcpy_fromiovec_safe(void *buf, struct iovec **iov,
 					size_t len, size_t *iovcount)
 {
 	size_t copy;
-
+        
 	while (len && *iovcount) {
 		copy = min(len, (*iov)->iov_len);
 		memcpy(buf, (*iov)->iov_base, copy);
@@ -21,14 +21,14 @@ ssize_t memcpy_fromiovec_safe(void *buf, struct iovec **iov,
 
 		/* Move iov cursor */
 		(*iov)->iov_base += copy;
-		(*iov)->iov_len += copy;
+		(*iov)->iov_len -= copy;
 
 		if (!(*iov)->iov_len) {
 			(*iov)++;
 			(*iovcount)--;
 		}
-	}
-
+	}                                    
+        
 	return len;
 }
 

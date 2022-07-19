@@ -47,7 +47,6 @@ int virtio_pci_signal_vq(struct broiler *broiler,
 	struct virtio_pci *vpci = vdev->virtio;
 	int tbl = vpci->vq_vector[vq];
 
-	printf("TRACE %s\n", __func__);
 	if (virtio_pci_msix_enabled(vpci) && tbl != VIRTIO_MSI_NO_VECTOR) {
 		if (vpci->pdev.msix.ctrl & PCI_MSIX_FLAGS_MASKALL ||
 			vpci->msix_table[tbl].ctrl &
@@ -99,11 +98,8 @@ static bool virtio_pci_specific_data_in(struct broiler *broiler,
 		}
 		return true;
 	} else if (type == VIRTIO_PCI_O_CONFIG) {
-		u8 cfg;
-
-		cfg = vdev->ops->get_config(broiler, vpci->data)[config_offset];
-		ioport_write8(data, cfg);
-		return true;
+		return virtio_access_config(broiler,
+			vdev, vpci->data, config_offset, data, size, false);
 	}
 	return false;
 }
@@ -132,7 +128,7 @@ virtio_pci_data_in(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 		/* PFN for the currently selected queue */
 		vq = vdev->ops->get_vq(broiler, vpci->data,
 						vpci->queue_selector);
-		ioport_write32(data, vq->pfn);
+		ioport_write32(data, vq->vring_addr.pfn);
 		break;
 	case VIRTIO_PCI_QUEUE_NUM:
 		/* Queue size for the currently selected queue */
@@ -158,6 +154,7 @@ virtio_pci_data_in(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 						vdev, data, size, offset);
 		break;
 	}
+
 	return ret;
 }
 
@@ -253,7 +250,7 @@ static int virtio_pci_add_msix_route(struct virtio_pci *vpci, u32 vec)
 		return gsi;
 
 	if (gsi < 0)
-		die("XXXfailed to configure MSIs");
+		die("failed to configure MSIs");
 
 	return gsi;
 }
@@ -307,11 +304,14 @@ virtio_pci_data_out(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 {
 	struct virtio_pci *vpci;
 	struct broiler *broiler;
+	struct virt_queue *vq;
+	unsigned int vq_count;
 	bool ret = true;
 	u32 val;
 
 	broiler = vcpu->broiler;
 	vpci = vdev->virtio;
+	vq_count = vdev->ops->get_vq_count(broiler, vpci->data);
 
 	switch (offset) {
 	case VIRTIO_PCI_GUEST_FEATURES:
@@ -321,26 +321,43 @@ virtio_pci_data_out(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 	case VIRTIO_PCI_QUEUE_PFN:
 		val = ioport_read32(data);
 		if (val) {
+			vq = vdev->ops->get_vq(broiler, vpci->data,
+							vpci->queue_selector);
+			vq->vring_addr = (struct vring_addr) {
+				.legacy = true,
+				.pfn    = val,
+				.align  = VIRTIO_PCI_VRING_ALIGN,
+				.pgsize = 1 << VIRTIO_PCI_QUEUE_ADDR_SHIFT,
+			};
 			virtio_pci_init_ioeventfd(broiler, vdev,
 						vpci->queue_selector);
 			vdev->ops->init_vq(broiler, vpci->data,
-				vpci->queue_selector,
-				1 << VIRTIO_PCI_QUEUE_ADDR_SHIFT,
-				VIRTIO_PCI_VRING_ALIGN, val);
+						vpci->queue_selector);
 		} else
 			virtio_pci_exit_vq(broiler, vdev, vpci->queue_selector);
 		break;
 	case VIRTIO_PCI_QUEUE_SEL:
-		vpci->queue_selector = ioport_read16(data);
+		val = ioport_read16(data);
+		if (val >= vq_count) {
+			printf("QUEUE_SEL value (%d) is larger than "
+					"VQ count (%u)\n", val, vq_count);
+			return false;
+		}
+		vpci->queue_selector = val;
 		break;
 	case VIRTIO_PCI_QUEUE_NOTIFY:
 		val = ioport_read16(data);
-		vdev->ops->notify_vq(broiler, vpci->data, val);
+		if (val >= vq_count) {
+			printf("QUEUE_SEL val (%u) is larger than "
+					"VQ count (%u)\n", val, vq_count);
+			return false;
+		}
+		vpci->queue_selector = val;
 		break;
 	case VIRTIO_PCI_STATUS:
 		vpci->status = ioport_read8(data);
 		if (!vpci->status) /* Sample endianness on reset */
-			vdev->endian = broiler_cpu_get_endianness(vcpu);
+			vdev->endian = VIRTIO_ENDIAN_LE;
 		virtio_notify_status(broiler, vdev, vpci->data, vpci->status);
 		break;
 	default:
@@ -406,6 +423,7 @@ static void virtio_pci_msix_mmio_callback(struct broiler_cpu *vcpu,
 	size_t offset;
 	int vecnum;
 
+	msix_io_addr = virtio_pci_msix_io_addr(vpci);
 	pba_offset = vpci->pdev.msix.pba_offset & ~PCI_MSIX_TABLE_BIR;
 	if (addr >= msix_io_addr + pba_offset) {
 		/* Read access to PBA */
@@ -501,6 +519,7 @@ int virtio_pci_init(struct broiler *broiler, void *dev,
 	vpci->broiler = broiler;
 	vpci->data = dev;
 
+	/* BAR0 - BAR1 - BAR2 */
 	port_addr = pci_alloc_io_port_block(PCI_IO_SIZE);
 	mmio_addr = pci_alloc_mmio_block(PCI_IO_SIZE);
 	msix_io_block = pci_alloc_mmio_block(VIRTIO_MSIX_BAR_SIZE);

@@ -20,7 +20,6 @@ void virtio_set_guest_features(struct broiler *broiler,
 			struct virtio_device *vdev, void *dev, u32 features)
 {
 	vdev->features = features;
-	vdev->ops->set_guest_features(broiler, dev, features);
 }
 
 void virtio_exit_vq(struct broiler *broiler, struct virtio_device *vdev,
@@ -109,6 +108,34 @@ bool virtio_queue_should_signal(struct virt_queue *vq)
 	return false;
 }
 
+void virtio_init_device_vq(struct broiler *broiler,
+	struct virtio_device *vdev, struct virt_queue *vq, size_t nr_descs)
+{
+	struct vring_addr *addr = &vq->vring_addr;
+
+	vq->endian		= vdev->endian;
+	vq->use_event_idx	= (vdev->features & VIRTIO_RING_F_EVENT_IDX);
+	vq->enabled		= true;
+
+	if (addr->legacy) {
+		unsigned long base = (u64)addr->pfn * addr->pgsize;
+		void *p = gpa_flat_to_hva(broiler, base);
+
+		vring_init(&vq->vring, nr_descs, p, addr->align);
+	} else {
+		u64 desc = (u64)addr->desc_hi << 32 | addr->desc_lo;
+		u64 avail = (u64)addr->avail_hi << 32 | addr->avail_lo;
+		u64 used = (u64)addr->used_hi << 32 | addr->used_lo;
+
+		vq->vring = (struct vring) {
+			.desc = gpa_flat_to_hva(broiler, desc),
+			.used = gpa_flat_to_hva(broiler, used),
+			.avail = gpa_flat_to_hva(broiler, avail),
+			.num = nr_descs,
+		};
+	}
+}
+
 bool virtio_access_config(struct broiler *broiler, struct virtio_device *vdev,
 			  void *dev, unsigned long offset, void *data,
 			  size_t size, bool is_write)
@@ -188,7 +215,7 @@ void virtio_notify_status(struct broiler *broiler,
 
 	/* Add a few hints to help devices */
 	if ((status & VIRTIO_CONFIG_S_DRIVER_OK) &&
-		!(vdev->status & VIRTIO_STATUS_START)) {
+			!(vdev->status & VIRTIO_STATUS_START)) {
 		vdev->status |= VIRTIO_STATUS_START;
 		ext_status |= VIRTIO_STATUS_START;
 	} else if (!status && (vdev->status & VIRTIO_STATUS_START)) {
@@ -199,9 +226,10 @@ void virtio_notify_status(struct broiler *broiler,
 		 * Reset virtqueues and stop all traffic now, so that the
 		 * device can safely reset the backend in notify_status().
 		 */
-		if (ext_status & VIRTIO_STATUS_STOP)
-			vdev->ops->reset(broiler, vdev);
+		vdev->ops->reset(broiler, vdev);
 	}
+	if (!status)
+		ext_status |= VIRTIO_STATUS_CONFIG;
 
 	if (vdev->ops->notify_status)
 		vdev->ops->notify_status(broiler, dev, ext_status);

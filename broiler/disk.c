@@ -26,6 +26,7 @@ static ssize_t raw_image_read(struct disk_image *disk, u64 sector,
 
 		shift_iovec(&iov, &iovcount, nr, &total, &count, &offset);
 	}
+
 	return total;
 }
 
@@ -142,6 +143,7 @@ ssize_t disk_image_read(struct disk_image *disk, u64 sector,
 	ssize_t total = 0;
 
 	if (disk->ops->read) {
+		/* RAW: raw_image_read */
 		total = disk->ops->read(disk, sector, iov, iovcount, param);
 		if (total < 0) {
 			printf("disk_image_read error: total=%ld\n", 

@@ -18,7 +18,7 @@ static void virtio_blk_complete(void *param, long len)
 	u8 *status;
 
 	/* status */
-	status = req->iov[req->out + req->in - 1].iov_base;
+	status = req->status;
 	*status = (len < 0) ? VIRTIO_BLK_S_IOERR : VIRTIO_BLK_S_OK;
 
 	mutex_lock(&bdev->mutex);
@@ -69,7 +69,7 @@ static void set_guest_features(struct broiler *broiler, void *dev, u32 features)
 						conf->opt_io_size);
 }
 
-static int get_vq_count(struct broiler *broiler, void *dev)
+static unsigned int get_vq_count(struct broiler *broiler, void *dev)
 {
 	return NUM_VIRT_QUEUES;
 }
@@ -97,7 +97,7 @@ static void virtio_blk_do_io_request(struct broiler *broiler,
 	}
 
 	type = virtio_guest_to_host_u32(vq, req_hdr.type);
-	sector = virtio_guest_to_host_u64(vq, req_hdr.type);
+	sector = virtio_guest_to_host_u64(vq, req_hdr.sector);
 
 	iovcount += req->in;
 	if (!iov_size(iov, iovcount)) {
@@ -131,7 +131,7 @@ static void virtio_blk_do_io_request(struct broiler *broiler,
 		virtio_blk_complete(req, len);
 		break;
 	default:
-		printf("request type %d\n", type);
+		printf("Warning: request type %d\n", type);
 		break;
 	}
 }
@@ -172,8 +172,7 @@ static void *virtio_blk_thread(void *dev)
 	return NULL;
 }
 
-static int init_vq(struct broiler *broiler, void *dev, u32 vq,
-					u32 page_size, u32 align, u32 pfn)
+static int init_vq(struct broiler *broiler, void *dev, u32 vq)
 {
 	struct blk_dev *bdev = dev;
 	struct virt_queue *queue;
@@ -182,19 +181,14 @@ static int init_vq(struct broiler *broiler, void *dev, u32 vq,
 
 	compat_remove_message(compat_id);
 
-	queue		= &bdev->vqs[vq];
-	queue->pfn	= pfn;
-	p		= virtio_get_vq(broiler, queue->pfn, page_size);
-
-	vring_init(&queue->vring, VIRTIO_BLK_QUEUE_SIZE, p, align);
-	virtio_init_device_vq(&bdev->vdev, queue);
-
+	virtio_init_device_vq(broiler, &bdev->vdev,
+				&bdev->vqs[vq], VIRTIO_BLK_QUEUE_SIZE);
 	if (vq != 0)
 		return 0;
 
 	for (i = 0; i < ARRAY_SIZE(bdev->reqs); i++) {
 		bdev->reqs[i] = (struct blk_dev_req) {
-			.bdev =bdev,
+			.bdev = bdev,
 			.broiler = broiler,
 		};
 	}
@@ -266,10 +260,17 @@ static int set_size_vq(struct broiler *broiler, void *dev, u32 vq, int size)
 	return size;
 }
 
+static size_t get_config_size(struct broiler *broiler, void *dev)
+{
+	struct blk_dev *bdev = dev;
+
+	return sizeof(bdev->blk_config);
+}
+
 static struct virtio_ops virtio_blk_ops = {
 	.get_config			= get_config,
+	.get_config_size		= get_config_size,
 	.get_host_features		= get_host_features,
-	.set_guest_features		= set_guest_features,
 	.get_vq_count			= get_vq_count,
 	.init_vq			= init_vq,
 	.exit_vq			= exit_vq,

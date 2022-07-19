@@ -271,9 +271,10 @@ static inline void vring_init(struct vring *vr, unsigned int num, void *p,
 {
 	vr->num = num;
 	vr->desc = p;
-	vr->avail = (struct vring_avail *)((char *)p + num * sizeof(struct vring_desc));
-	vr->used = (void *)(((uintptr_t)&vr->avail->ring[num] + sizeof(__virtio16)
-				+ align-1) & ~(align - 1));
+	vr->avail = (struct vring_avail *)((char *)p +
+					num * sizeof(struct vring_desc));
+	vr->used = (void *)(((uintptr_t)&vr->avail->ring[num] +
+				sizeof(__virtio16) + align-1) & ~(align - 1));
 }
 
 static inline unsigned vring_size(unsigned int num, unsigned long align)
@@ -670,6 +671,27 @@ struct virtio_scsi_inhdr {
 /* Initialize the config */
 #define VIRTIO_STATUS_CONFIG		(1 << 10)
 
+struct vring_addr {     
+	bool			legacy;
+	union {
+		/* Legacy description */
+		struct {
+			u32	pfn;
+			u32	align;
+			u32	pgsize;
+		};
+		/* Modern description */
+		struct {
+			u32	desc_lo;
+			u32	desc_hi;
+			u32	avail_lo;
+			u32	avail_hi;
+			u32	used_lo;
+			u32	used_hi;
+		};
+	};
+};
+        
 /*
  * Virtio IDs
  *
@@ -764,36 +786,41 @@ struct virtio_ops {
 	u8 *(*get_config)(struct broiler *broiler, void *dev);
 	size_t (*get_config_size)(struct broiler *broiler, void *dev);
 	u32 (*get_host_features)(struct broiler *broiler, void *dev);
-	void (*set_guest_features)(struct broiler *broiler, void *dev, u32 features);
-	int (*get_vq_count)(struct broiler *broiler, void *dev);
-	int (*init_vq)(struct broiler *broiler, void *dev, u32 vq, u32 page_size,
-					u32 align, u32 pfn);
+	unsigned int (*get_vq_count)(struct broiler *broiler, void *dev);
+	int (*init_vq)(struct broiler *broiler, void *dev, u32 vq);
 	void (*exit_vq)(struct broiler *broiler, void *dev, u32 vq);
 	int (*notify_vq)(struct broiler *broiler, void *dev, u32 vq);
-	struct virt_queue *(*get_vq)(struct broiler *broiler, void *dev, u32 vq);
+	struct virt_queue *(*get_vq)(struct broiler *broiler,
+							void *dev, u32 vq);
 	int (*get_size_vq)(struct broiler *broiler, void *dev, u32 vq);
-	int (*set_size_vq)(struct broiler *broiler, void *dev, u32 vq, int size);
-	void (*notify_vq_gsi)(struct broiler *broiler, void *dev, u32 vq, u32 gsi);
-	void (*notify_vq_eventfd)(struct broiler *broiler, void *dev, u32 vq, u32 efd);
-	int (*signal_vq)(struct broiler *broiler, struct virtio_device *vdev, u32 queueid);
-	int (*signal_config)(struct broiler *broiler, struct virtio_device *vdev);
+	int (*set_size_vq)(struct broiler *broiler, void *dev,
+							u32 vq, int size);
+	void (*notify_vq_gsi)(struct broiler *broiler, void *dev,
+							u32 vq, u32 gsi);
+	void (*notify_vq_eventfd)(struct broiler *broiler, void *dev,
+							u32 vq, u32 efd);
+	int (*signal_vq)(struct broiler *broiler,
+				struct virtio_device *vdev, u32 queueid);
+	int (*signal_config)(struct broiler *broiler,
+				struct virtio_device *vdev);
 	void (*notify_status)(struct broiler *broiler, void *dev, u32 status);
-	int (*init)(struct broiler *broiler, void *dev, struct virtio_device *vdev,
+	int (*init)(struct broiler *broiler, void *dev,
+				struct virtio_device *vdev,
 				int device_id, int subsys_id, int class);
 	int (*exit)(struct broiler *broiler, struct virtio_device *vdev);
 	int (*reset)(struct broiler *broiler, struct virtio_device *vdev);
 };
 
 struct virt_queue {
-	struct vring	vring;
-	u32		pfn; 
+	struct vring    vring;
+	struct vring_addr vring_addr;
 	/* The last_avail_idx field is an index to ->ring of struct vring_avail.
 	   It's where we assume the next request index is at.  */
-	u16		last_avail_idx;
-	u16		last_used_signalled;
-	u16		endian;
-	bool		use_event_idx;
-	bool		enabled;
+	u16             last_avail_idx;
+	u16             last_used_signalled;
+	u16             endian;
+	bool            use_event_idx;
+	bool            enabled;
 };
 
 #define virtio_guest_to_host_u16(x, v)		(v)
@@ -807,14 +834,6 @@ static inline void  *
 virtio_get_vq(struct broiler *broiler, u32 pfn, u32 page_size)
 {
 	return gpa_flat_to_hva(broiler, (u64)pfn * page_size);
-}
-
-static inline void
-virtio_init_device_vq(struct virtio_device *vdev, struct virt_queue *vq)
-{
-	vq->endian = vdev->endian;
-	vq->use_event_idx = (vdev->features & VIRTIO_RING_F_EVENT_IDX);
-	vq->enabled = true;
 }
 
 static inline u16 virt_queue_pop(struct virt_queue *queue)
@@ -967,8 +986,11 @@ extern u16 virt_queue_get_head_iov(struct virt_queue *vq, struct iovec iov[],
 		u16 *out, u16 *in, u16 head, struct broiler *broiler);
 extern int virtio_pci_signal_config(struct broiler *broiler,
                                         struct virtio_device *vdev);
-extern bool virtio_access_config(struct broiler *broiler, struct virtio_device *vdev,
+extern bool virtio_access_config(struct broiler *broiler,
+			struct virtio_device *vdev,
 			void *dev, unsigned long offset, void *data,
 			size_t size, bool is_write);
+extern void virtio_init_device_vq(struct broiler *broiler,
+	struct virtio_device *vdev, struct virt_queue *vq, size_t nr_descs);
 
 #endif
