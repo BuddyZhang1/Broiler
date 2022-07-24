@@ -3,6 +3,37 @@
 #include "broiler/utils.h"
 #include <stdarg.h>
 
+LIST_HEAD(broiler_dev_init_list);
+LIST_HEAD(broiler_dev_exit_list);
+
+int broiler_dev_init(struct broiler *broiler)
+{
+	struct init_entry *tmp;
+	int r;
+
+	list_for_each_entry(tmp, &broiler_dev_init_list, n) {
+		r = tmp->func(broiler);
+		if (r < 0)
+			return r;
+	}
+
+	return r;
+}
+
+int broiler_dev_exit(struct broiler *broiler)
+{
+	struct init_entry *tmp;
+	int r;
+
+	list_for_each_entry(tmp, &broiler_dev_exit_list, n) {
+		r = tmp->func(broiler);
+		if (r < 0)
+			return r;
+	}
+
+	return r;
+}
+
 static void report(const char *prefix, const char *err, va_list params)
 {
 	char msg[1024];

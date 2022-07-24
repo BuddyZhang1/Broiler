@@ -638,7 +638,6 @@ static int broiler_cpu_start(struct broiler_cpu *cpu)
 
 		switch (cpu->kvm_run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			printf("TRACE EXIT UNKNOW.\n");
 			break;	
 		case KVM_EXIT_IO : {
 			bool ret;
@@ -673,18 +672,35 @@ static int broiler_cpu_start(struct broiler_cpu *cpu)
 			break;
 		}
 		case KVM_EXIT_INTR:
-			printf("TRACE EXIT INTR\n");
+			if (cpu->is_running)
+				break;
 			goto exit_broiler;
 		case KVM_EXIT_SHUTDOWN:
-			printf("TRACE EXIT SHUTDOWN\n");
 			goto exit_broiler;
 		case KVM_EXIT_SYSTEM_EVENT:
-			printf("TRACE EXIT SYSTEM EVENT.\n");
+			/*
+			 * Print the type of system event and
+			 * treat all system events as shutdown request.
+			 */
+			switch (cpu->kvm_run->system_event.type) {
+			default:
+				printf("unknow system event type %d\n",
+					cpu->kvm_run->system_event.type);
+				/* fall through for now */
+			case KVM_SYSTEM_EVENT_RESET:
+				/* fall through for now */
+			case KVM_SYSTEM_EVENT_SHUTDOWN:
+				/*
+				 * Ensure that all VCPUs are torn down,
+				 * regardless of which CPU generated the event.
+				 */
+				broiler_reboot(cpu->broiler);
+				goto exit_broiler;
+			}
 			break;
 		default: {
 			bool ret;
 
-			printf("EIXT REASON %d\n", cpu->kvm_run->exit_reason);
 			ret = broiler_cpu_handle_exit(cpu);
 			if (!ret)
 				goto panic_broiler;

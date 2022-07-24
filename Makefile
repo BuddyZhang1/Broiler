@@ -19,6 +19,7 @@ endif
 SRC			+= $(wildcard $(PWD)/broiler/*.c)
 SRC			+= $(wildcard $(PWD)/lib/*.c)
 SRC			+= $(wildcard $(PWD)/virtio/*.c)
+SRC			+= $(wildcard $(PWD)/hw/*.c)
 SRC			+= main.c
 
 ## BIOS Source Code

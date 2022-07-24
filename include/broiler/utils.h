@@ -3,6 +3,29 @@
 #define _BROILER_UTILS_H
 
 #include "broiler/broiler.h"
+#include "linux/list.h"
+
+struct init_entry {
+	struct list_head n;
+	int (*func)(struct broiler *);
+};
+
+extern struct list_head broiler_dev_init_list;
+extern struct list_head broiler_dev_exit_list;
+
+#define dev_init(cb)						\
+static void __attribute__ ((constructor)) __dev_init_##cb(void)	\
+{								\
+	static struct init_entry _t_##cb = { .func = cb };	\
+	list_add_tail(&_t_##cb.n, &broiler_dev_init_list);	\
+}
+
+#define dev_exit(cb)						\
+static void __attribute__ ((constructor)) __dev_exit_##cb(void)	\
+{								\
+	static struct init_entry _t_##cb = { .func = cb };	\
+	list_add_tail(&_t_##cb.n, &broiler_dev_exit_list);	\
+}
 
 #ifdef __GNUC__
 #define NORETURN __attribute__((__noreturn__))

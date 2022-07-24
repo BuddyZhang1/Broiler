@@ -110,6 +110,13 @@ int broiler_base_init(struct broiler *broiler)
 		goto err_virtio;
 	}
 
+	/* device */
+	if (broiler_dev_init(broiler) < 0) {
+		printf("Device init faild.\n");
+		ret = -errno;
+		goto err_device;
+	}
+
 	/* mptable */
 	if (broiler_mptable_init(broiler) < 0) {
 		printf("MPTABLE init failed.\n");
@@ -139,6 +146,8 @@ err_running:
 err_threadpool:
 	broiler_mptable_exit(broiler);
 err_mptable:
+	broiler_dev_exit(broiler);
+err_device:
 	broiler_virtio_exit(broiler);
 err_virtio:
 	broiler_rtc_exit(broiler);

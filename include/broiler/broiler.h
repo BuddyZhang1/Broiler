@@ -142,6 +142,8 @@ extern int broiler_threadpool_init(struct broiler *broiler);
 extern int broiler_threadpool_exit(struct broiler *broiler);
 extern int broiler_cpu_running(struct broiler *broiler);
 extern int broiler_cpu_exit(struct broiler *broiler);
+extern int broiler_dev_init(struct broiler *broiler);
+extern int broiler_dev_exit(struct broiler *broiler);
 
 static inline bool hva_ptr_in_ram(struct broiler *broiler, void *p)
 {
