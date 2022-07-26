@@ -761,10 +761,6 @@ struct vring_addr {
 #define PCI_CLASS_9P				0xff0000
 #define PCI_CLASS_VSOCK				0xff0000
 
-/* VRING */
-
-#define vring_avail_event(vr)	(*(__virtio16 *)&(vr)->used->ring[(vr)->num])
-
 enum virtio_trans {
 	VIRTIO_PCI,
 	VIRTIO_MMIO,

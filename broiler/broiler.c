@@ -42,7 +42,7 @@ int broiler_base_init(struct broiler *broiler)
 
 	/* IOEVENTFD */
 	if (ioeventfd_init(broiler) < 0) {
-		printf("IOeventfd failed.\n");
+		printf("ioeventfd init failed.\n");
 		ret = -errno;
 		goto err_ioeventfd;
 	}

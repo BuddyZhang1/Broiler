@@ -152,6 +152,7 @@ ssize_t disk_image_read(struct disk_image *disk, u64 sector,
 		}
 	}
 
+	/* virtio-blk: virtio_blk_complete */
 	if (!disk->async && disk->disk_req_cb)
 		disk->disk_req_cb(param, total);
 

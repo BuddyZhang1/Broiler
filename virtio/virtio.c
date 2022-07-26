@@ -281,7 +281,7 @@ u16 virt_queue_get_head_iov(struct virt_queue *vq, struct iovec iov[],
 	}
 
 	do {
-		/* Grab the first decripotr, and check it's OK. */
+		/* Grab the first decriptor, and check it's OK. */
 		iov[*out + *in].iov_len =
 				virtio_guest_to_host_u32(vq, desc[idx].len);
 		iov[*out + *in].iov_base =

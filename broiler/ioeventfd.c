@@ -16,9 +16,9 @@
 #include "broiler/ioeventfd.h"
 
 static struct epoll_event broiler_events[IOEVENTFD_MAX_EVENTS];
-static bool ioeventfd_avail;
-static int epoll_fd, epoll_stop_fd;
-static LIST_HEAD(used_ioevents);
+static bool broiler_ioeventfd_avail;
+static int broiler_epoll_fd, broiler_epoll_stop_fd;
+static LIST_HEAD(broiler_used_ioevents);
 
 static void *ioeventfd_thread(void *param)
 {
@@ -29,12 +29,12 @@ static void *ioeventfd_thread(void *param)
 	for (;;) {
 		int nfds, i;
 
-		nfds = epoll_wait(epoll_fd, broiler_events,
+		nfds = epoll_wait(broiler_epoll_fd, broiler_events,
 						IOEVENTFD_MAX_EVENTS, -1);
 		for (i = 0; i < nfds; i++) {
 			struct ioevent *ioevent;
 
-			if (broiler_events[i].data.fd == epoll_stop_fd)
+			if (broiler_events[i].data.fd == broiler_epoll_stop_fd)
 				goto done;
 
 			ioevent = broiler_events[i].data.ptr;
@@ -48,7 +48,7 @@ static void *ioeventfd_thread(void *param)
 	}
 
 done:
-	tmp = write(epoll_stop_fd, &tmp, sizeof(tmp));
+	tmp = write(broiler_epoll_stop_fd, &tmp, sizeof(tmp));
 
 	return NULL;
 }
@@ -57,7 +57,7 @@ static int ioeventfd_start(void)
 {
 	pthread_t thread;
 
-	if (!ioeventfd_avail)
+	if (!broiler_ioeventfd_avail)
 		return -ENOSYS;
 
 	return pthread_create(&thread, NULL, ioeventfd_thread, NULL);
@@ -70,7 +70,7 @@ int ioeventfd_add_event(struct ioevent *ioevent, int flags)
 	struct ioevent *new_ioevent;
 	int event, r;
 
-	if (!ioeventfd_avail)
+	if (!broiler_ioeventfd_avail)
 		return -ENOSYS;
 
 	new_ioevent = malloc(sizeof(*new_ioevent));
@@ -108,14 +108,15 @@ int ioeventfd_add_event(struct ioevent *ioevent, int flags)
 			.data.ptr	= new_ioevent,
 		};
 
-		r = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event, &epoll_event);
+		r = epoll_ctl(broiler_epoll_fd, EPOLL_CTL_ADD,
+							event, &epoll_event);
 		if (r) {
 			r = -errno;
 			goto cleanup;
 		}
 	}
 	new_ioevent->flags = kvm_ioevent.flags;
-	list_add_tail(&new_ioevent->list, &used_ioevents);
+	list_add_tail(&new_ioevent->list, &broiler_used_ioevents);
 
 	return 0;
 
@@ -130,10 +131,10 @@ int ioeventfd_del_event(u64 addr, u64 datamatch)
 	struct ioevent *ioevent;
 	u8 found = 0;
 
-	if (!ioeventfd_avail)
+	if (!broiler_ioeventfd_avail)
 		return -ENOSYS;
 
-	list_for_each_entry(ioevent, &used_ioevents, list) {
+	list_for_each_entry(ioevent, &broiler_used_ioevents, list) {
 		if (ioevent->io_addr == addr &&
 			ioevent->datamatch == datamatch) {
 			found = 1;
@@ -154,7 +155,7 @@ int ioeventfd_del_event(u64 addr, u64 datamatch)
 	};
 
 	ioctl(ioevent->broiler->vm_fd, KVM_IOEVENTFD, &kvm_ioevent);
-	epoll_ctl(epoll_fd, EPOLL_CTL_DEL, ioevent->fd, NULL);
+	epoll_ctl(broiler_epoll_fd, EPOLL_CTL_DEL, ioevent->fd, NULL);
 	list_del(&ioevent->list);
 
 	close(ioevent->fd);
@@ -168,18 +169,20 @@ int ioeventfd_init(struct broiler *broiler)
 	struct epoll_event epoll_event = { .events = EPOLLIN };
 	int r;
 
-	ioeventfd_avail = kvm_support_extension(broiler, KVM_CAP_IOEVENTFD);
-	if (!ioeventfd_avail)
+	broiler_ioeventfd_avail =
+			kvm_support_extension(broiler, KVM_CAP_IOEVENTFD);
+	if (!broiler_ioeventfd_avail)
 		return 1; /* Not fatal, but let caller determine no-go. */
 
-	epoll_fd = epoll_create(IOEVENTFD_MAX_EVENTS);
-	if (epoll_fd < 0)
+	broiler_epoll_fd = epoll_create(IOEVENTFD_MAX_EVENTS);
+	if (broiler_epoll_fd < 0)
 		return -errno;
 
-	epoll_stop_fd = eventfd(0, 0);
-	epoll_event.data.fd = epoll_stop_fd;
+	broiler_epoll_stop_fd = eventfd(0, 0);
+	epoll_event.data.fd   = broiler_epoll_stop_fd;
 
-	r = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, epoll_stop_fd, &epoll_event);
+	r = epoll_ctl(broiler_epoll_fd, EPOLL_CTL_ADD,
+				broiler_epoll_stop_fd, &epoll_event);
 	if (r < 0)
 		goto err_epoll_ctl;
 
@@ -191,8 +194,8 @@ int ioeventfd_init(struct broiler *broiler)
 
 err_epoll_start:
 err_epoll_ctl:
-	close(epoll_stop_fd);
-	close(epoll_fd);
+	close(broiler_epoll_stop_fd);
+	close(broiler_epoll_fd);
 
 	return r;
 }
@@ -202,19 +205,19 @@ int ioeventfd_exit(struct broiler *broiler)
 	u64 tmp = 1;
 	int r;
 
-	if (!ioeventfd_avail)
+	if (!broiler_ioeventfd_avail)
 		return 0;
 
-	r = write(epoll_stop_fd, &tmp, sizeof(tmp));
+	r = write(broiler_epoll_stop_fd, &tmp, sizeof(tmp));
 	if (r < 0)
 		return r;
 
-	r = read(epoll_stop_fd, &tmp, sizeof(tmp));
+	r = read(broiler_epoll_stop_fd, &tmp, sizeof(tmp));
 	if (r < 0)
 		return r;
 
-	close(epoll_fd);
-	close(epoll_stop_fd);
+	close(broiler_epoll_fd);
+	close(broiler_epoll_stop_fd);
 
 	return 0;
 }
