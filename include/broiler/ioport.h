@@ -4,6 +4,7 @@
 
 #include "broiler/kvm.h"
 #include "broiler/device.h"
+#include "linux/mutex.h"
 #include "linux/rbtree-interval.h"
 
 /*      

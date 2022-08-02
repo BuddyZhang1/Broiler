@@ -1,61 +1,76 @@
+/*
+ * Broiler PCI
+ *
+ * (C) 2022.08.01 BuddyZhang1 <buddy.zhang@aliyun.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
 #include "broiler/broiler.h"
 #include "broiler/utils.h"
 #include "broiler/pci.h"
 #include "broiler/device.h"
 #include "broiler/ioport.h"
 
+/* BAR0 and BAR1 bitmap */
+#define SLOT_NUM_REG		0x00
+#define SLOT_SEL_REG		0x04
+#define MIN_FREQ_REG		0x08
+#define MAX_FREQ_REG		0x0C
+
 static struct pci_device BiscuitOS_pci_device;
 static struct device BiscuitOS_device = {
 	.bus_type	= DEVICE_BUS_PCI,
 	.data		= &BiscuitOS_pci_device,
 };
-static u32 BiscuitOS_signatures = 0xBD;
-static u32 BiscuitOS_PCI_VERSION = 0x10;
-static u32 BiscuitOS_TODO = 0x28;
-static u32 BiscuitOS_MODE = 0x89;
 
-static void BiscuitOS_pci_io_callback(struct broiler_cpu *vcpu,
+/* Default value */
+static u32 BiscuitOS_slot_num = 0x20;
+static u32 BiscuitOS_slot_sel = 0x00;
+static u32 BiscuitOS_freq_min = 0x10;
+static u32 BiscuitOS_freq_max = 0x40;
+
+static void BiscuitOS_pci_bar_callback(struct broiler_cpu *vcpu,
 		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
 {
+	struct pci_device *pdev = (struct pci_device *)ptr;
+	u64 offset;
 	u32 val;
 
-	switch (addr) {
-	case 0x00: /* R/W Signatures */
-		if (!is_write)
-			ioport_write32((void *)data, BiscuitOS_signatures);
-		else
-			BiscuitOS_signatures = ioport_read32((void *)data);
-		break;
-	case 0x04: /* RO PCI Version */
-		ioport_write32((void *)data, BiscuitOS_PCI_VERSION);
-		break;
-	default:
-		break;
+	if (addr > 0x100000)
+		offset = addr - pci_bar_address(pdev, 1);
+	else
+		offset = addr - pci_bar_address(pdev, 0);
+
+	if (is_write) { /* IO Write */
+		switch (offset) {
+		case SLOT_NUM_REG:
+			BiscuitOS_slot_num = ioport_read32((void *)data);
+			break;
+		case SLOT_SEL_REG:
+			BiscuitOS_slot_sel = ioport_read32((void *)data);
+			break;
+		default:
+			printf("PORT %#lx Unsupport Write OPS!\n", offset);
+			break;
+		}
+	} else { /* IO Read */
+		switch (offset) {
+		case SLOT_NUM_REG:
+			ioport_write32((void *)data, BiscuitOS_slot_num);
+			break;
+		case SLOT_SEL_REG:
+			ioport_write32((void *)data, BiscuitOS_slot_sel);
+			break;
+		case MIN_FREQ_REG:
+			ioport_write32((void *)data, BiscuitOS_freq_min);
+			break;
+		case MAX_FREQ_REG:
+			ioport_write32((void *)data, BiscuitOS_freq_max);
+			break;
+		}
 	}
-}
-
-static void BiscuitOS_pci_mmio_callback(struct broiler_cpu *vcpu,
-		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
-{
-	u32 val;
-
-	switch (addr) {
-	case 0x00: /* R/W TODO */
-		if (!is_write)
-			ioport_write32((void *)data, BiscuitOS_TODO);
-		else
-			BiscuitOS_TODO = ioport_read32((void *)data);
-		break;
-	case 0x04: /* R/W MODE */
-		if (!is_write)
-			ioport_write32((void *)data, BiscuitOS_MODE);
-		else
-			BiscuitOS_MODE = ioport_read32((void *)data);
-		break;
-	default:
-		break;
-	}
-
 }
 
 static int BiscuitOS_pci_bar_active(struct broiler *broiler,
@@ -70,11 +85,11 @@ static int BiscuitOS_pci_bar_active(struct broiler *broiler,
 	switch (bar) {
 	case 0:
 		r = broiler_register_pio(broiler, bar_addr, bar_size,
-				BiscuitOS_pci_io_callback, data);
+				BiscuitOS_pci_bar_callback, data);
 		break;
 	case 1:
 		r = broiler_ioport_register(broiler, bar_addr, bar_size,
-				BiscuitOS_pci_mmio_callback, data,
+				BiscuitOS_pci_bar_callback, data,
 				DEVICE_BUS_MMIO);
 		break;
 	}
@@ -105,6 +120,7 @@ static int BiscuitOS_pci_bar_deactive(struct broiler *broiler,
 
 static int BiscuitOS_pci_init(struct broiler *broiler)
 {
+	struct pci_device *pdev = &BiscuitOS_pci_device;
 	u32 mmio_addr;
 	u16 io_addr;
 	int r;
@@ -126,11 +142,14 @@ static int BiscuitOS_pci_init(struct broiler *broiler)
 		.bar[1]		= mmio_addr | PCI_BASE_ADDRESS_SPACE_MEMORY,
 		.bar_size[0]	= PCI_IO_SIZE,
 		.bar_size[1]	= PCI_IO_SIZE,
+
+		.status		= PCI_STATUS_CAP_LIST,
 	};
 
 	r = pci_register_bar_regions(broiler, &BiscuitOS_pci_device,
 				BiscuitOS_pci_bar_active,
-				BiscuitOS_pci_bar_deactive, NULL);
+				BiscuitOS_pci_bar_deactive,
+				(void *)&BiscuitOS_pci_device);
 	if (r < 0)
 		return r;
 
@@ -144,6 +163,8 @@ dev_init(BiscuitOS_pci_init);
 
 static int BiscuitOS_pci_exit(struct broiler *broiler)
 {
+	device_unregister(&BiscuitOS_device);
+	
 	return 0;
 }
 dev_exit(BiscuitOS_pci_exit);

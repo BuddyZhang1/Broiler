@@ -2,6 +2,7 @@
 #include "broiler/broiler.h"
 #include "broiler/kvm.h"
 #include "broiler/ioport.h"
+#include "broiler/pci.h"
 #include "linux/mutex.h"
 #include "linux/rbtree.h"
 
