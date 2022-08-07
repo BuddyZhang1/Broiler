@@ -62,6 +62,12 @@ broiler_deregister_pio(struct broiler *broiler, u16 port)
 	return broiler_ioport_deregister(broiler, port, DEVICE_BUS_IOPORT);
 }
 
+static inline bool
+broiler_deregister_mmio(struct broiler *broiler, u64 phys_addr)
+{
+	return broiler_ioport_deregister(broiler, phys_addr, DEVICE_BUS_MMIO);
+}
+
 static inline u8 ioport_read8(u8 *data)
 {
 	return *data;

@@ -52,7 +52,7 @@ static void BiscuitOS_pci_bar_callback(struct broiler_cpu *vcpu,
 			BiscuitOS_slot_sel = ioport_read32((void *)data);
 			break;
 		default:
-			printf("PORT %#lx Unsupport Write OPS!\n", offset);
+			printf("PORT %#llx Unsupport Write OPS!\n", offset);
 			break;
 		}
 	} else { /* IO Read */

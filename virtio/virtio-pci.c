@@ -346,13 +346,15 @@ virtio_pci_data_out(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 		vpci->queue_selector = val;
 		break;
 	case VIRTIO_PCI_QUEUE_NOTIFY:
+		/* Broiler use Asynchronous IO to kick off,
+		 * so ignore this route. */
 		val = ioport_read16(data);
 		if (val >= vq_count) {
 			printf("QUEUE_SEL val (%u) is larger than "
 					"VQ count (%u)\n", val, vq_count);
 			return false;
 		}
-		vpci->queue_selector = val;
+		vdev->ops->notify_vq(broiler, data, val);
 		break;
 	case VIRTIO_PCI_STATUS:
 		vpci->status = ioport_read8(data);

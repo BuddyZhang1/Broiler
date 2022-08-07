@@ -19,6 +19,7 @@
 #define PCI_CONFIG_DATA		0xcfc
 #define PCI_CONFIG_BUS_FORWARD	0xcfa
 #define PCI_IO_SIZE		0x100
+#define PCI_MEM_SIZE		0x1000000
 #define PCI_IOPORT_START	0x6200
 #define PCI_CFG_SIZE		(1ULL << 24)
 
