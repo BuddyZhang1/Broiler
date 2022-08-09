@@ -69,6 +69,31 @@ struct msix_cap {
 	u32 pba_offset;
 };
 
+struct msi_cap {
+	u8 cap;
+	u8 next;
+	u16 ctrl;
+	union {
+		struct {
+			u32 msg_addr_lo;
+			u16 msg_data;
+			u16 reserved;
+			u32 mask;
+			u32 pending;
+		} msi_cap0;
+
+		struct {
+			u32 msg_addr_lo;
+			u32 msg_addr_hi;
+			u16 msg_data;
+			u16 reserved;
+			u32 mask;
+			u32 pending;
+		} msi_cap1;
+
+	} __attribute__((packed));
+};
+
 struct pci_device {
 	/* Configuration space, as seen by the guest */
 	union {
@@ -95,6 +120,7 @@ struct pci_device {
 			u8	irq_pin;
 			u8	min_gnt;
 			u8	max_lat;
+			struct msi_cap msi;
 			struct msix_cap msix;
 		} __attribute__((packed));
 		/* Pad to PCI config space size */

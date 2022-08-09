@@ -1,7 +1,7 @@
 /*
- * Broiler PCI MSI Interrupt
+ * Broiler PCI DMA with MSI Interrupt
  *
- * (C) 2022.08.01 BuddyZhang1 <buddy.zhang@aliyun.com>
+ * (C) 2022.08.08 BuddyZhang1 <buddy.zhang@aliyun.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -14,27 +14,109 @@
 #include "broiler/ioport.h"
 #include "broiler/ioeventfd.h"
 #include "broiler/kvm.h"
+#include "broiler/memory.h"
 #include <sys/eventfd.h>
 
-/* Doorball */
+/* Doorball and DMA Register */
+#define DMA_SRC_REG	0x00
+#define DMA_DST_REG	0x04
+#define DMA_DIRT_REG	0x08
+#define DMA_LEN_REG	0x0C
 #define DOORBALL_REG	0x10
+
+#define DMA_BUFFER_LEN	4096
+#define PCI_TO_DDR	0
+#define DDR_TO_PCI	1
 
 static pthread_t doorball_thread;
 static int doorball_efd = 0;
-/* MSI address and data */
-static struct msi_msg broiler_msi_msg;
-
 static struct pci_device Broiler_pci_device;
 static struct device Broiler_device = {
 	.bus_type	= DEVICE_BUS_PCI,
 	.data		= &Broiler_pci_device,
 };
+/* Device internal Memory */
+static char buffer[DMA_BUFFER_LEN] = "Weclome Broiler DMA, Advanced "
+		"Programmable HypV Controller, CommandWord IOAPIC etc.";
+static u64 DMA_src, DMA_dst, DMA_len, DMA_dirt;
+
+static inline u64 pci_to_hva(u64 dma_addr)
+{
+	return dma_addr + (unsigned long)buffer;
+}
 
 static void Broiler_pci_bar_callback(struct broiler_cpu *vcpu,
-		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr) { }
+		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
+{
+	struct pci_device *pdev = (struct pci_device *)ptr;
+	u64 offset = addr - pci_bar_address(pdev, 0);
 
-static void Broiler_pci_msix_callback(struct broiler_cpu *vcpu,
-		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr) { }
+	if (is_write) { /* IO Write */
+		switch (offset) {
+		case DMA_SRC_REG:
+			DMA_src = ioport_read32((void *)data);
+			break;
+		case DMA_DST_REG:
+			DMA_dst = ioport_read32((void *)data);
+			break;
+		case DMA_LEN_REG:
+			DMA_len = ioport_read32((void *)data);
+			break;
+		case DMA_DIRT_REG:
+			DMA_dirt = ioport_read32((void *)data);
+			break;
+		}
+	} else { /* IO Read */
+		switch (offset) {
+		case DMA_SRC_REG:
+			ioport_write32((void *)data, DMA_src);
+			break;
+		case DMA_DST_REG:
+			ioport_write32((void *)data, DMA_dst);
+			break;
+		case DMA_LEN_REG:
+			ioport_write32((void *)data, DMA_len);
+			break;
+		case DMA_DIRT_REG:
+			ioport_write32((void *)data, DMA_dirt);
+			break;
+		}
+	}
+}
+
+static int dma_ops(struct broiler *broiler)
+{
+	char *src_hva, *dst_hva;
+
+	if (DMA_dirt == PCI_TO_DDR) { /* Memory Write TLP */
+		src_hva = (char *)pci_to_hva(DMA_src);
+		dst_hva = (char *)gpa_flat_to_hva(broiler, DMA_dst);
+	} else if (DMA_dirt == DDR_TO_PCI) { /* Memory Read TLP */
+		src_hva = (char *)gpa_flat_to_hva(broiler, DMA_src);
+		dst_hva = (char *)pci_to_hva(DMA_dst);
+	}
+	return !!memcpy(dst_hva, src_hva, DMA_len);
+}
+
+static void doorball_msi_init(struct broiler *broiler, struct pci_device *pdev)
+{
+	pdev->msi.cap = PCI_CAP_ID_MSI;
+	pdev->msi.next = 0;
+	pdev->msi.ctrl = 0; /* 1-Entry */
+	/* Legacy hack: ignore writes to uninit regions (e.g. ROM BAR) */
+	pdev->msi.msi_cap0.msg_addr_lo = 0xFF;
+	pdev->msi.msi_cap0.msg_data    = 0xFF;
+}
+
+static void doorball_msi_raise(struct broiler *broiler, struct pci_device *pdev)
+{
+	struct kvm_msi msi = {
+		.address_lo = pdev->msi.msi_cap0.msg_addr_lo,
+		.address_hi = 0x00,
+		.data       = pdev->msi.msi_cap0.msg_data,
+	};
+	irq_signal_msi(broiler, &msi);
+}
 
 static void *doorball_thdhands(void *dev)
 {
@@ -48,16 +130,13 @@ static void *doorball_thdhands(void *dev)
 		if (r < 0)
 			continue;
 
+		/* DMA ops */
+		dma_ops(broiler);
 		/* Emulate Asynchronous IO */
 		sleep(5);
 
 		/* Injuect MSI/MSIX Interrupt */
-		msi = (struct kvm_msi) {
-			.address_lo = broiler_msi_msg.address_lo,
-			.address_hi = broiler_msi_msg.address_hi,
-			.data       = broiler_msi_msg.data,
-		};
-		irq_signal_msi(broiler, &msi);
+		doorball_msi_raise(broiler, &Broiler_pci_device);
 	}
 	pthread_exit(NULL);
 
@@ -128,85 +207,46 @@ static int Broiler_pci_bar_active(struct broiler *broiler,
 			struct pci_device *pdev, int bar, void *data)
 {
 	u32 bar_addr, bar_size;
-	int r;
 
 	bar_addr = pci_bar_address(pdev, bar);
 	bar_size = pci_bar_size(pdev, bar);
 
-	switch (bar) {
-	case 0:
-		r = broiler_register_pio(broiler, bar_addr, bar_size,
+	return broiler_register_pio(broiler, bar_addr, bar_size,
 				Broiler_pci_bar_callback, data);
-		break;
-	case 1:
-		r = broiler_register_mmio(broiler, bar_addr, bar_size,
-				false, Broiler_pci_msix_callback, data);
-		break;
-	}
-
-	return r;
 }
 
 static int Broiler_pci_bar_deactive(struct broiler *broiler,
 			struct pci_device *pdev, int bar, void *data)
 {
 	u32 bar_addr;
-	int r;
 
 	bar_addr = pci_bar_address(pdev, bar);
 
-	switch (bar) {
-	case 0:
-		r = broiler_deregister_pio(broiler, bar_addr);
-		break;
-	case 1:
-		r = broiler_deregister_mmio(broiler, bar_addr);
-		break;
-	}
-}
-
-static int doorball_msi_init(struct broiler *broiler, struct pci_device *pdev)
-{
-	pdev->msix.cap = PCI_CAP_ID_MSIX;
-	pdev->msix.next = 0;
-	pdev->msix.ctrl = 0; /* 1-Entry */
-	/* Both table and PBA are mapped to the same BAR(1) */
-	pdev->msix.table_offset = 1;
-	pdev->msix.pba_offset = 1 | PCI_IO_SIZE;
-
-	if (irq_add_msix_route(broiler, &broiler_msi_msg, 0) < 0)
-		die("failed to configure broiler MSI.\n");
-
-	return 0;
+	return broiler_deregister_pio(broiler, bar_addr);
 }
 
 static int Broiler_pci_init(struct broiler *broiler)
 {
 	struct pci_device *pdev = &Broiler_pci_device;
-	u32 msix_addr;
 	u16 io_addr;
 	int r;
 
 	/* IO-BAR */
 	io_addr = pci_alloc_io_port_block(PCI_IO_SIZE);
-	/* MSI-BAR */
-	msix_addr = pci_alloc_mmio_block(PCI_IO_SIZE * 2);
 
 	/* PCI Configuration Space */
 	Broiler_pci_device = (struct pci_device) {
-		.vendor_id	= 0x1023,
+		.vendor_id	= 0x1024,
 		.device_id	= 0x1991,
 		.command	= PCI_COMMAND_IO | PCI_COMMAND_MEMORY,
 		.header_type	= PCI_HEADER_TYPE_NORMAL,
 		.revision_id	= 0,
 
 		.bar[0]		= io_addr | PCI_BASE_ADDRESS_SPACE_IO,
-		.bar[1]		= io_addr | PCI_BASE_ADDRESS_SPACE_MEMORY,
 		.bar_size[0]	= PCI_IO_SIZE,
-		.bar_size[1]	= PCI_IO_SIZE * 2,
 
 		.status		= PCI_STATUS_CAP_LIST,
-		.capabilities	= (void *)&pdev->msix - (void *)pdev,
+		.capabilities	= (void *)&pdev->msi - (void *)pdev,
 	};
 
 	r = pci_register_bar_regions(broiler, &Broiler_pci_device,
