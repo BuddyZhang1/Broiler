@@ -303,32 +303,21 @@ int virtio_init(struct broiler *broiler, void *dev,
 		int subsys_id, int class)
 {
 	void *virtio;
-	int r;
 
-	switch (trans) {
-	case VIRTIO_PCI:
-		vdev->legacy		= true;
-		virtio = calloc(sizeof(struct virtio_pci), 1);
-		if (!virtio)
-			return -ENOMEM;
-		vdev->virtio		= virtio;
-		vdev->ops		= ops;
-		vdev->ops->signal_vq	= virtio_pci_signal_vq;
-		vdev->ops->signal_config = virtio_pci_signal_config;
-		vdev->ops->init		= virtio_pci_init;
-		vdev->ops->exit		= virtio_pci_exit;
-		vdev->ops->reset	= virtio_pci_reset;
-		r = vdev->ops->init(broiler, dev, 
-				vdev, device_id, subsys_id, class);
-		break;
-	case VIRTIO_MMIO:
-		/* Don't supoort MMIO VIRTIO */
-		break;
-	default:
-		r = -1;
-	}
+	vdev->legacy		= true;
+	virtio = calloc(sizeof(struct virtio_pci), 1);
+	if (!virtio)
+		return -ENOMEM;
+	vdev->virtio		= virtio;
+	vdev->ops		= ops;
+	vdev->ops->signal_vq	= virtio_pci_signal_vq;
+	vdev->ops->signal_config = virtio_pci_signal_config;
+	vdev->ops->init		= virtio_pci_init;
+	vdev->ops->exit		= virtio_pci_exit;
+	vdev->ops->reset	= virtio_pci_reset;
+	return vdev->ops->init(broiler, dev, 
+			vdev, device_id, subsys_id, class);
 
-	return r;
 }
 
 int broiler_virtio_init(struct broiler *broiler)

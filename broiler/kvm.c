@@ -866,9 +866,6 @@ int kvm_init(struct broiler *broiler)
 		goto err_memory;
 	}
 
-	/* PCI Region */
-	broiler->pci_base = mem.guest_phys_addr + mem.memory_size;
-
 	/* IRQ */
 	if (ioctl(broiler->vm_fd, KVM_CREATE_IRQCHIP) < 0) {
 		printf("KVM_CREATE_IRQCHIP failed\n");

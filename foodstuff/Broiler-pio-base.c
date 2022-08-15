@@ -13,7 +13,7 @@
 #include "broiler/types.h"
 #include <assert.h>
 
-#define BISCUITOS_PIO_PORT	0x6800
+#define BISCUITOS_PIO_PORT	0x6000
 #define BISCUITOS_PIO_LEN	0x10
 #define SLOT_NUM_REG		0x00
 #define SLOT_SEL_REG		0x04

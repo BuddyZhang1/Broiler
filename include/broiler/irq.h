@@ -34,5 +34,6 @@ extern int irq_add_msix_route(struct broiler *broiler,
 				struct msi_msg *msg, u32 device_id);
 extern void irq_update_msix_route(struct broiler *, u32, struct msi_msg *);
 extern bool irq_can_signal_msi(struct broiler *broiler);
+extern int irq_alloc_line(void);
 
 #endif
