@@ -11,8 +11,25 @@
 static struct kvm_irq_routing *irq_routing = NULL;
 static int allocated_gsis = 0;
 static int next_gsi;
+static int next_irqchip_irq = 3; /* Master and Slave IRQCHIP */
+static int next_ioapic_irq  = 8; /* IOAPIC shared with Slave IRQCHIP */
 static struct msi_routing_ops irq_default_routing_ops;
 static struct msi_routing_ops *msi_routing_ops = &irq_default_routing_ops;
+
+int irq_alloc_from_irqchip(void)
+{
+	if (next_irqchip_irq > 16)
+		return -EINVAL;
+
+	return next_irqchip_irq++;
+}
+
+int irq_alloc_from_ioapic(void)
+{
+	if (next_ioapic_irq > 24)
+
+	return next_ioapic_irq++;
+}
 
 void broiler_irq_line(struct broiler *broiler, int irq, int level)
 {
@@ -27,10 +44,15 @@ void broiler_irq_line(struct broiler *broiler, int irq, int level)
 		die("KVM_IRQ_LINE failed.");
 }
 
-void broiler_irq_trigger(struct broiler *broiler, int irq)
+void broiler_irq_trigger(struct broiler *broiler, int irq, int rising)
 {
-	broiler_irq_line(broiler, irq, 1);
-	broiler_irq_line(broiler, irq, 0);
+	if (rising) { /* Rising edge */
+		broiler_irq_line(broiler, irq, 0);
+		broiler_irq_line(broiler, irq, 1);
+	} else { /* Falling edge */
+		broiler_irq_line(broiler, irq, 1);
+		broiler_irq_line(broiler, irq, 0);
+	}
 }
 
 static int irq_allocate_routing_entry(void)
@@ -202,15 +224,9 @@ int broiler_irq_init(struct broiler *broiler)
 		irq_add_routing(i, 
 			KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_SLAVE, i - 8);
 
-	/* Last but not least, IOAPIC */
-	for (i = 0; i < 24; i++) {
-		if (i == 0)
-			irq_add_routing(i, 
-				KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_IOAPIC, 2);
-		else if (i != 2)
-			irq_add_routing(i,
-				KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_IOAPIC, i);
-	}
+	/* Last but not least, IOAPIC, shared 12-15 GSI with IRQCHIP */
+	for (i = 12; i < 24; i++)
+		irq_add_routing(i, KVM_IRQ_ROUTING_IRQCHIP, IRQCHIP_IOAPIC, i);
 
 	if (ioctl(broiler->vm_fd, KVM_SET_GSI_ROUTING, irq_routing) < 0) {
 		free(irq_routing);

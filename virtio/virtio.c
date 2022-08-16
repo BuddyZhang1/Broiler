@@ -317,7 +317,6 @@ int virtio_init(struct broiler *broiler, void *dev,
 	vdev->ops->reset	= virtio_pci_reset;
 	return vdev->ops->init(broiler, dev, 
 			vdev, device_id, subsys_id, class);
-
 }
 
 int broiler_virtio_init(struct broiler *broiler)

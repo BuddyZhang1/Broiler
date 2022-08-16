@@ -8,7 +8,6 @@
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
 
-
 static u16 virtio_pci_port_addr(struct virtio_pci *vpci)
 {
 	return pci_bar_address(&vpci->pdev, 0);
@@ -59,7 +58,7 @@ int virtio_pci_signal_vq(struct broiler *broiler,
 			virtio_pci_signal_msi(broiler, 
 					vpci, vpci->vq_vector[vq]);
 		else
-			broiler_irq_trigger(broiler, vpci->gsis[vq]);
+			broiler_irq_trigger(broiler, vpci->gsis[vq], 0);
 	} else {
 		vpci->isr = VIRTIO_IRQ_HIGH;
 		broiler_irq_line(broiler,
@@ -344,17 +343,6 @@ virtio_pci_data_out(struct broiler_cpu *vcpu, struct virtio_device *vdev,
 			return false;
 		}
 		vpci->queue_selector = val;
-		break;
-	case VIRTIO_PCI_QUEUE_NOTIFY:
-		/* Broiler use Asynchronous IO to kick off,
-		 * so ignore this route. */
-		val = ioport_read16(data);
-		if (val >= vq_count) {
-			printf("QUEUE_SEL val (%u) is larger than "
-					"VQ count (%u)\n", val, vq_count);
-			return false;
-		}
-		vdev->ops->notify_vq(broiler, data, val);
 		break;
 	case VIRTIO_PCI_STATUS:
 		vpci->status = ioport_read8(data);

@@ -28,12 +28,13 @@ struct msi_routing_ops {
 };
 
 extern void broiler_irq_line(struct broiler *broiler, int irq, int level);
-extern void broiler_irq_trigger(struct broiler *broiler, int irq);
+extern void broiler_irq_trigger(struct broiler *broiler, int irq, int rising);
 extern int irq_signal_msi(struct broiler *broiler, struct kvm_msi *msi);
 extern int irq_add_msix_route(struct broiler *broiler,
 				struct msi_msg *msg, u32 device_id);
 extern void irq_update_msix_route(struct broiler *, u32, struct msi_msg *);
 extern bool irq_can_signal_msi(struct broiler *broiler);
-extern int irq_alloc_line(void);
+extern int irq_alloc_from_irqchip(void);
+extern int irq_alloc_from_ioapic(void);
 
 #endif

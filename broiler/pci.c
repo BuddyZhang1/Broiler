@@ -6,7 +6,6 @@
 #include "broiler/device.h"
 
 static u32 pci_config_address_bits;
-static u8 next_line = KVM_IRQ_OFFSET;
 
 /*
  * This is within our PCI gap - in an unused area.
@@ -16,11 +15,6 @@ static u8 next_line = KVM_IRQ_OFFSET;
  */
 static u32 pci_mmio_blocks 	= BROILER_PCI_MMIO_AREA;
 static u32 pci_io_port_blocks	= PCI_IOPORT_START;
-
-int irq_alloc_line(void)
-{
-	return next_line++;
-}
 
 u16 pci_alloc_io_port_block(u32 size)
 {
@@ -48,7 +42,7 @@ int pci_assign_irq(struct pci_device *pdev)
 	 * with A# for our singal function devices.
 	 */
 	pdev->irq_pin		= 1;
-	pdev->irq_line		= irq_alloc_line();
+	pdev->irq_line		= irq_alloc_from_ioapic();
 
 	if (!pdev->irq_type)
 		pdev->irq_type = IRQ_TYPE_LEVEL_HIGH;

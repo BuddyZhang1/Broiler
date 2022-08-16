@@ -1,7 +1,7 @@
 /*
- * Broiler Interrupt with vPIC
+ * Broiler Interrupt with vIOAPIC
  *
- * (C) 2022.08.14 BuddyZhang1 <buddy.zhang@aliyun.com>
+ * (C) 2022.08.16 BuddyZhang1 <buddy.zhang@aliyun.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -16,11 +16,11 @@
 #include <sys/eventfd.h>
 #include <assert.h>
 
-#define BROILER_PIO_PORT	0x6020
+#define BROILER_PIO_PORT	0x6040
 #define BROILER_PIO_LEN		0x10
 #define IRQ_NUM_REG		0x04
-#define IRQ_LOW			0
-#define IRQ_HIGH		1
+#define IRQ_FALLING		0
+#define IRQ_RISING		1
 
 /* interrupt irq */
 static pthread_t irq_thread;
@@ -41,8 +41,8 @@ static void *irq_threads(void *dev)
 		/* Emulate Asychronous IO */
 		sleep(5);
 
-		/* Inject Interrupt */
-		broiler_irq_line(broiler, irq, IRQ_HIGH);
+		/* Inject Interrupt: Rising */
+		broiler_irq_trigger(broiler, irq, IRQ_RISING);
 	}
 	pthread_exit(NULL);
 
@@ -66,10 +66,8 @@ static int Broiler_pio_init(struct broiler *broiler)
 	struct kvm_ioeventfd kvm_ioeventfd;
 	int r;
 
-	/* IRQ from Master or Slave IRQCHIP */
-	irq = irq_alloc_from_irqchip();
-	/* level trigger: set default level */
-	broiler_irq_line(broiler, irq, IRQ_LOW);
+	/* IRQ from IOAPIC */
+	irq = irq_alloc_from_ioapic();
 
 	r = broiler_register_pio(broiler, BROILER_PIO_PORT,
 			BROILER_PIO_LEN, Broiler_pio_callback, NULL);
