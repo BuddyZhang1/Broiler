@@ -39,10 +39,12 @@ static void *irq_threads(void *dev)
 			continue;
 
 		/* Emulate Asychronous IO */
-		sleep(5);
+		sleep(2);
 
+		syscall(600, 1);
 		/* Inject Interrupt */
 		broiler_irq_line(broiler, irq, IRQ_HIGH);
+		syscall(600, 0);
 	}
 	pthread_exit(NULL);
 

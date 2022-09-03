@@ -47,7 +47,9 @@ static void doorball_msi_raise(struct broiler *broiler, struct pci_device *pdev)
 		.address_hi = 0x00,
 		.data       = pdev->msi.msi_cap0.msg_data,
 	};
+	syscall(600, 1);
 	irq_signal_msi(broiler, &msi);
+	syscall(600, 0);
 }
 
 static void *doorball_thdhands(void *dev)
@@ -166,7 +168,7 @@ static int Broiler_pci_init(struct broiler *broiler)
 
 	/* PCI Configuration Space */
 	Broiler_pci_device = (struct pci_device) {
-		.vendor_id	= 0x1023,
+		.vendor_id	= 0x1001,
 		.device_id	= 0x1991,
 		.command	= PCI_COMMAND_IO | PCI_COMMAND_MEMORY,
 		.header_type	= PCI_HEADER_TYPE_NORMAL,
