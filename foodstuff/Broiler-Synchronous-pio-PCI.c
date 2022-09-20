@@ -1,7 +1,7 @@
 /*
- * Broiler PCI
+ * Broiler Synchronous IO on PCI
  *
- * (C) 2022.08.01 BuddyZhang1 <buddy.zhang@aliyun.com>
+ * (C) 2022.09.19 BuddyZhang1 <buddy.zhang@aliyun.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -38,10 +38,7 @@ static void Broiler_pci_bar_callback(struct broiler_cpu *vcpu,
 	u64 offset;
 	u32 val;
 
-	if (addr > 0x100000)
-		offset = addr - pci_bar_address(pdev, 1);
-	else
-		offset = addr - pci_bar_address(pdev, 0);
+	offset = addr - pci_bar_address(pdev, 0);
 
 	if (is_write) { /* IO Write */
 		switch (offset) {
@@ -77,45 +74,22 @@ static int Broiler_pci_bar_active(struct broiler *broiler,
 			struct pci_device *pdev, int bar, void *data)
 {
 	u32 bar_addr, bar_size;
-	int r = -EINVAL;
 
 	bar_addr = pci_bar_address(pdev, bar);
 	bar_size = pci_bar_size(pdev, bar);
 
-	switch (bar) {
-	case 0:
-		r = broiler_register_pio(broiler, bar_addr, bar_size,
-				Broiler_pci_bar_callback, data);
-		break;
-	case 1:
-		r = broiler_ioport_register(broiler, bar_addr, bar_size,
-				Broiler_pci_bar_callback, data,
-				DEVICE_BUS_MMIO);
-		break;
-	}
-
-	return r;
+	return broiler_register_pio(broiler, bar_addr, bar_size,
+			Broiler_pci_bar_callback, data);
 }
 
 static int Broiler_pci_bar_deactive(struct broiler *broiler,
 			struct pci_device *pdev, int bar, void *data)
 {
-	int r = -EINVAL;
 	u32 bar_addr;
 
 	bar_addr = pci_bar_address(pdev, bar);
 
-	switch (bar) {
-	case 0:
-		r = broiler_deregister_pio(broiler, bar_addr);
-		break;
-	case 1:
-		r = broiler_ioport_deregister(broiler,
-					bar_addr, DEVICE_BUS_MMIO);
-		break;
-	}
-
-	return r;
+	return  broiler_deregister_pio(broiler, bar_addr);
 }
 
 static int Broiler_pci_init(struct broiler *broiler)
@@ -127,21 +101,17 @@ static int Broiler_pci_init(struct broiler *broiler)
 
 	/* IO-BAR */
 	io_addr = pci_alloc_io_port_block(PCI_IO_SIZE);
-	/* MM-BAR */
-	mmio_addr = pci_alloc_mmio_block(PCI_IO_SIZE);
 
 	/* PCI Configuration Space */
 	Broiler_pci_device = (struct pci_device) {
-		.vendor_id	= 0x1016,
-		.device_id	= 0x1413,
-		.command	= PCI_COMMAND_IO | PCI_COMMAND_MEMORY,
+		.vendor_id	= 0x1003,
+		.device_id	= 0x1991,
+		.command	= PCI_COMMAND_IO,
 		.header_type	= PCI_HEADER_TYPE_NORMAL,
 		.revision_id	= 0,
 
 		.bar[0]		= io_addr | PCI_BASE_ADDRESS_SPACE_IO,
-		.bar[1]		= mmio_addr | PCI_BASE_ADDRESS_SPACE_MEMORY,
 		.bar_size[0]	= PCI_IO_SIZE,
-		.bar_size[1]	= PCI_IO_SIZE,
 
 		.status		= PCI_STATUS_CAP_LIST,
 	};

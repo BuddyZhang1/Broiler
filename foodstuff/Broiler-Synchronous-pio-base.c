@@ -1,5 +1,5 @@
 /*
- * Broiler PIO
+ * Broiler Synchronous PIO
  *
  * (C) 2022.08.01 BuddyZhang1 <buddy.zhang@aliyun.com>
  *
@@ -13,7 +13,7 @@
 #include "broiler/types.h"
 #include <assert.h>
 
-#define BISCUITOS_PIO_PORT	0x6000
+#define BISCUITOS_PIO_PORT	0x6060
 #define BISCUITOS_PIO_LEN	0x10
 #define SLOT_NUM_REG		0x00
 #define SLOT_SEL_REG		0x04
@@ -27,7 +27,7 @@ static u32 freq_min = 0x10;
 static u32 freq_max = 0x40;
 
 /* Emulate PIO */
-static void BiscuitOS_pio_callback(struct broiler_cpu *vcpu,
+static void Broiler_pio_callback(struct broiler_cpu *vcpu,
 		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	u64 offset = addr - BISCUITOS_PIO_PORT;
@@ -64,23 +64,23 @@ static void BiscuitOS_pio_callback(struct broiler_cpu *vcpu,
 	}
 }
 
-static int BiscuitOS_pio_init(struct broiler *broiler)
+static int Broiler_pio_init(struct broiler *broiler)
 {
 	int r;
 
 	r = broiler_register_pio(broiler, BISCUITOS_PIO_PORT,
-			BISCUITOS_PIO_LEN, BiscuitOS_pio_callback, NULL);
+			BISCUITOS_PIO_LEN, Broiler_pio_callback, NULL);
 	if (r < 0)
 		return r;
 
 	return 0;
 }
-dev_init(BiscuitOS_pio_init);
+dev_init(Broiler_pio_init);
 
-static int BiscuitOS_pio_exit(struct broiler *broiler)
+static int Broiler_pio_exit(struct broiler *broiler)
 {
 	broiler_deregister_pio(broiler, BISCUITOS_PIO_PORT);
 
 	return 0;
 }
-dev_exit(BiscuitOS_pio_exit);
+dev_exit(Broiler_pio_exit);

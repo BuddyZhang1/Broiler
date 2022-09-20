@@ -53,7 +53,7 @@ __thread struct broiler_cpu *current_broiler_cpu;
 
 bool kvm_support_extension(struct broiler *broiler, unsigned int extension)
 {
-	if (ioctl(broiler->kvm_fd, KVM_CHECK_EXTENSION, extension) < 0)
+	if (ioctl(broiler->kvm_fd, KVM_CHECK_EXTENSION, extension) <= 0)
 		return false;
 	return true;
 }
