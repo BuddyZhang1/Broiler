@@ -10,6 +10,7 @@ Broiler I/O Port and MMIO Resource layout
 | Broiler-Synchronous-pio-base.c      |      [0x6060, 0x6070]      |       None        |
 | Broiler-Synchronous-pio-In-Kernel.c |      [0x6080, 0x6090]      |       None        |
 | Broiler-Synchronous-pio-PCI.c       |      Random                |       None        |
+| Broiler-Asynchronous-pio-base.c     |      [0x60A0, 0x60B0]      |       None        |
 
 
 #### MMIO
@@ -24,4 +25,5 @@ Broiler I/O Port and MMIO Resource layout
 | Broiler-DMA-msi-base.c              |          Random            |     1024:1991     |
 | Broiler-DMA-msix-base.c             |          Random            |     1026:1991     |
 | Broiler-Synchronous-pio-PCI.c       |          Random            |     1003:1991     |
+| Broiler-Synchronous-mmio-base.c     |  [0xD0000000, 0xD0000010]  |       None        |
 

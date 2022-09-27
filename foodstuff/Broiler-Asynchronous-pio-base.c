@@ -1,7 +1,7 @@
 /*
- * Broiler Interrupt with vPIC
+ * Broiler Asynchronous PIO
  *
- * (C) 2022.08.14 BuddyZhang1 <buddy.zhang@aliyun.com>
+ * (C) 2022.09.21 BuddyZhang1 <buddy.zhang@aliyun.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -16,8 +16,9 @@
 #include <sys/eventfd.h>
 #include <assert.h>
 
-#define BROILER_PIO_PORT	0x6020
+#define BROILER_PIO_PORT	0x60A0
 #define BROILER_PIO_LEN		0x10
+#define DOORBALL_REG		0x00
 #define IRQ_NUM_REG		0x04
 #define IRQ_LOW			0
 #define IRQ_HIGH		1
@@ -38,7 +39,7 @@ static void *irq_threads(void *dev)
 		if (r < 0)
 			continue;
 
-		/* Emulate Asychronous IO */
+		/* Emulate Asynchronous IO */
 		sleep(2);
 
 		/* Inject Interrupt */
@@ -96,7 +97,9 @@ static int Broiler_pio_init(struct broiler *broiler)
 		.flags	= KVM_IOEVENTFD_FLAG_PIO,
 	};
 
+	syscall(600, 1);
 	r = ioctl(broiler->vm_fd, KVM_IOEVENTFD, &kvm_ioeventfd);
+	syscall(600, 0);
 	if (r) {
 		r = -errno;
 		goto err_ioctl;
