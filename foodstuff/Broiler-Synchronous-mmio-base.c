@@ -27,7 +27,7 @@ static u32 freq_min = 0x10;
 static u32 freq_max = 0x40;
 
 /* Emulate MMIO */
-static void Broiler_pio_callback(struct broiler_cpu *vcpu,
+static void Broiler_mmio_callback(struct broiler_cpu *vcpu,
 		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	u64 offset = addr - BISCUITOS_MMIO_BASE;
@@ -69,7 +69,7 @@ static int Broiler_pio_init(struct broiler *broiler)
 	int r;
 
 	r = broiler_ioport_register(broiler, BISCUITOS_MMIO_BASE,
-			BISCUITOS_MMIO_LEN, Broiler_pio_callback, NULL,
+			BISCUITOS_MMIO_LEN, Broiler_mmio_callback, NULL,
 			DEVICE_BUS_MMIO);
 	if (r < 0)
 		return r;

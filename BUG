@@ -1,0 +1,42 @@
+
+
+#### TSC BUG
+
+```
+[    0.000000] smpboot: Allowing 2 CPUs, 0 hotplug CPUs
+[    0.000000] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.000000] PM: hibernation: Registered nosave memory: [mem 0x0009f000-0x0009ffff]
+[    0.000000] PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000effff]
+[    0.000000] PM: hibernation: Registered nosave memory: [mem 0x000f0000-0x000fefff]
+[    0.000000] PM: hibernation: Registered nosave memory: [mem 0x000ff000-0x000fffff]
+[    0.000000] [mem 0x10000000-0xffffffff] available for PCI devices
+[    0.000000] setup_percpu: NR_CPUS:64 nr_cpumask_bits:64 nr_cpu_ids:2 nr_node_ids:1
+[    0.000000] percpu: Embedded 52 pages/cpu s173208 r8192 d31592 u1048576
+[    0.000000] pcpu-alloc: s173208 r8192 d31592 u1048576 alloc=1*2097152
+[    0.000000] pcpu-alloc: [0] 0 1 
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 64393
+[    0.000000] Policy zone: DMA32
+[    0.000000] Kernel command line: notsc noapic pci=conf1 reboot=k panic=1 i8042.direct=1 i8042.dumbkbd=1 i8042.nopnp=1 i8042.noaux=1 root=/dev/vda rw rootfstype=ext4 console=ttyS0 loglevel=8
+[    0.000000] tsc: Marking TSC unstable due to boot parameter notsc
+[    0.000000] Dentry cache hash table entries: 32768 (order: 6, 262144 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.000000] mem auto-init: stack:off, heap alloc:off, heap free:off
+[    0.000000] Memory: 225680K/261752K available (14353K kernel code, 2630K rwdata, 3644K rodata, 1192K init, 1588K bss, 35812K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU event tracing is enabled.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=64 to nr_cpu_ids=2.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=2
+[    0.000000] NR_IRQS: 4352, nr_irqs: 440, preallocated irqs: 16
+[    0.000000] random: get_random_bytes called from start_kernel+0x368/0x534 with crng_init=0
+[    0.000000] Console: colour *CGA 80x25
+[    0.000000] printk: console [ttyS0] enabled
+[    0.000000] APIC: Switch to symmetric I/O mode setup
+[    0.001000] Not enabling interrupt remapping due to skipped IO-APIC setup
+[    0.002000] tsc: Unable to calibrate against PIT
+[    0.002000] tsc: No reference (HPET/PMTIMER) available
+
+```
+
+Stop on Kernel as above, Reboot Broiler!

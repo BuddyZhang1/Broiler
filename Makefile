@@ -106,6 +106,6 @@ install:
 
 clean:
 	@rm -rf $(TARGET) BiscuitOS-Broiler-default *.o bios/*.o \
-		bios/*.bin* include/broiler/bios-rom.h
+		bios/*.bin* include/broiler/bios-rom.h *.s *.i
 
 .PHONY: FORCE

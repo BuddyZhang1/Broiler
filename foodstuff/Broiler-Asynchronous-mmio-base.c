@@ -1,7 +1,7 @@
 /*
- * Broiler Asynchronous PIO
+ * Broiler Asynchronous MMIO
  *
- * (C) 2022.09.21 BuddyZhang1 <buddy.zhang@aliyun.com>
+ * (C) 2022.10.01 BuddyZhang1 <buddy.zhang@aliyun.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -10,15 +10,14 @@
 #include "broiler/broiler.h"
 #include "broiler/ioport.h"
 #include "broiler/utils.h"
-#include "broiler/kvm.h"
 #include "broiler/types.h"
 #include "broiler/irq.h"
 #include <sys/eventfd.h>
 #include <assert.h>
 
-#define BROILER_PIO_PORT	0x60A0
-#define BROILER_PIO_LEN		0x10
-#define DOORBALL_REG		0x00
+#define BROILER_MMIO_BASE	0xD0000040
+#define BROILER_MMIO_LEN	0x10
+#define BOORBALL_REG		0x00
 #define IRQ_NUM_REG		0x04
 #define IRQ_LOW			0
 #define IRQ_HIGH		1
@@ -34,12 +33,12 @@ static void *irq_threads(void *dev)
 	u64 data;
 	int r;
 
-	while (1) {
+	while (1) { 
 		r = read(irq_eventfd, &data, sizeof(u64));
 		if (r < 0)
 			continue;
 
-		/* Emulate Asynchronous IO */
+		/* Emulate Asynchronous MMIO */
 		sleep(2);
 
 		/* Inject Interrupt */
@@ -50,19 +49,19 @@ static void *irq_threads(void *dev)
 	return NULL;
 }
 
-/* Emulate PIO */
-static void Broiler_pio_callback(struct broiler_cpu *vcpu,
-                u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
+/* Emulate MMIO */
+static void Broiler_mmio_callback(struct broiler_cpu *vcpu,
+		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
 {
 	assert(len == 4);
-	assert(addr - BROILER_PIO_PORT == IRQ_NUM_REG);
+	assert(addr - BROILER_MMIO_BASE == IRQ_NUM_REG);
 	assert(!is_write);
 
 	/* Read-Only */
 	ioport_write32((void *)data, irq);
 }
 
-static int Broiler_pio_init(struct broiler *broiler)
+static int Broiler_mmio_init(struct broiler *broiler)
 {
 	struct kvm_ioeventfd kvm_ioeventfd;
 	int r;
@@ -72,10 +71,12 @@ static int Broiler_pio_init(struct broiler *broiler)
 	/* level trigger: set default level */
 	broiler_irq_line(broiler, irq, IRQ_LOW);
 
-	r = broiler_register_pio(broiler, BROILER_PIO_PORT,
-			BROILER_PIO_LEN, Broiler_pio_callback, NULL);
+	/* Register MMIO Region */
+	r = broiler_ioport_register(broiler, BROILER_MMIO_BASE + IRQ_NUM_REG,
+			BROILER_MMIO_LEN - IRQ_NUM_REG, 
+			Broiler_mmio_callback, NULL, DEVICE_BUS_MMIO);
 	if (r < 0)
-		goto err_pio;
+		goto err_mmio;
 
 	/* Asynchronous IO */
 	irq_eventfd = eventfd(0, 0);
@@ -91,10 +92,10 @@ static int Broiler_pio_init(struct broiler *broiler)
 
 	/* KVM Asynchronous IO */
 	kvm_ioeventfd = (struct kvm_ioeventfd) {
-		.addr	= BROILER_PIO_PORT,
-		.len	= sizeof(u16),
-		.fd	= irq_eventfd,
-		.flags	= KVM_IOEVENTFD_FLAG_PIO,
+		.addr   = BROILER_MMIO_BASE + BOORBALL_REG,
+		.len    = sizeof(u32),
+		.fd     = irq_eventfd,
+		.flags  = 0, /* MMIO Must 0 */
 	};
 
 	r = ioctl(broiler->vm_fd, KVM_IOEVENTFD, &kvm_ioeventfd);
@@ -110,18 +111,20 @@ err_ioctl:
 err_thread:
 	close(irq_eventfd);
 err_eventfd:
-	broiler_deregister_pio(broiler, BROILER_PIO_PORT);
-err_pio:
+	broiler_ioport_deregister(broiler, BROILER_MMIO_BASE,
+					DEVICE_BUS_MMIO);
+err_mmio:
 	return r;
 }
-dev_init(Broiler_pio_init);
+dev_init(Broiler_mmio_init);
 
-static int Broiler_pio_exit(struct broiler *broiler)
+static int Broiler_mmio_exit(struct broiler *broiler)
 {
 	pthread_kill(irq_thread, SIGBROILEREXIT);
 	close(irq_eventfd);
-	broiler_deregister_pio(broiler, BROILER_PIO_PORT);
+	broiler_ioport_deregister(broiler, BROILER_MMIO_BASE,
+					DEVICE_BUS_MMIO);
 
 	return 0;
 }
-dev_exit(Broiler_pio_exit);
+dev_exit(Broiler_mmio_exit);
