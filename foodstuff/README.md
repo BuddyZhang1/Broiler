@@ -31,3 +31,4 @@ Broiler I/O Port and MMIO Resource layout
 | Broiler-Synchronous-mmio-PCI.c      |          Random            |     1006:1991     |
 | Broiler-Asynchronous-mmio-base.c    |  [0xD0000040, 0xD0000050]  |       None        |
 | Broiler-Asynchronous-mmio-PCI.c     |          Random            |     1008:1991     |
+| Broiler-MMIO-base.c                 |  [0xF0000000, 0xF0001000]  |       None        |
