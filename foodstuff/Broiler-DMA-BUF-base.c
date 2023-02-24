@@ -18,8 +18,8 @@
 #include <sys/eventfd.h>
 
 /* Doorball and DMA Register */
-#define DMA_SRC_REG	0x00
-#define DMA_DST_REG	0x04
+#define PCI_ADDR_REG	0x00
+#define DDR_ADDR_REG	0x04
 #define DMA_DIRT_REG	0x08
 #define DMA_LEN_REG	0x0C
 #define DOORBALL_REG	0x10
@@ -38,9 +38,10 @@ static struct device Broiler_device = {
 };
 static struct msix_table msix_table[MSIX_TABLE_NR];
 /* Device internal Memory */
+static char Broiler_ID[] = "Hello BiscuitOS DMA :) More See: http://www.biscuitos.cn/";
 static char *DMA_MEMORY;
 static unsigned long DMA_MEMORY_LEN = 0x100000; /* 1MiB DMA Memory */
-static u64 DMA_src, DMA_dst, DMA_len, DMA_dirt;
+static u64 PCI_addr, DDR_addr, DMA_len, DMA_dirt;
 
 static void Broiler_pci_io_bar_callback(struct broiler_cpu *vcpu,
 		u64 addr, u8 *data, u32 len, u8 is_write, void *ptr)
@@ -50,11 +51,11 @@ static void Broiler_pci_io_bar_callback(struct broiler_cpu *vcpu,
 
 	if (is_write) { /* IO Write */
 		switch (offset) {
-		case DMA_SRC_REG:
-			DMA_src = ioport_read32((void *)data);
+		case PCI_ADDR_REG:
+			PCI_addr = ioport_read32((void *)data);
 			break;
-		case DMA_DST_REG:
-			DMA_dst = ioport_read32((void *)data);
+		case DDR_ADDR_REG:
+			DDR_addr = ioport_read32((void *)data);
 			break;
 		case DMA_LEN_REG:
 			DMA_len = ioport_read32((void *)data);
@@ -65,11 +66,11 @@ static void Broiler_pci_io_bar_callback(struct broiler_cpu *vcpu,
 		}
 	} else { /* IO Read */
 		switch (offset) {
-		case DMA_SRC_REG:
-			ioport_write32((void *)data, DMA_src);
+		case PCI_ADDR_REG:
+			ioport_write32((void *)data, PCI_addr);
 			break;
-		case DMA_DST_REG:
-			ioport_write32((void *)data, DMA_dst);
+		case DDR_ADDR_REG:
+			ioport_write32((void *)data, DDR_addr);
 			break;
 		case DMA_LEN_REG:
 			ioport_write32((void *)data, DMA_len);
@@ -109,11 +110,11 @@ static int dma_ops(struct broiler *broiler)
 	char *src_hva, *dst_hva;
 
 	if (DMA_dirt == PCI_TO_DDR) { /* Memory Write TLP */
-		src_hva = (char *)pci_to_hva(DMA_src);
-		dst_hva = (char *)gpa_flat_to_hva(broiler, DMA_dst);
+		src_hva = (char *)pci_to_hva(PCI_addr);
+		dst_hva = (char *)gpa_flat_to_hva(broiler, DDR_addr);
 	} else if (DMA_dirt == DDR_TO_PCI) { /* Memory Read TLP */
-		src_hva = (char *)gpa_flat_to_hva(broiler, DMA_src);
-		dst_hva = (char *)pci_to_hva(DMA_dst);
+		src_hva = (char *)gpa_flat_to_hva(broiler, DDR_addr);
+		dst_hva = (char *)pci_to_hva(PCI_addr);
 	}
 	return !!memcpy(dst_hva, src_hva, DMA_len);
 }
@@ -154,7 +155,7 @@ static void *doorball_thdhands(void *dev)
 		dma_ops(broiler);
 		if (DMA_dirt == PCI_TO_DDR) {
 			/* Emulate Asynchronous IO */
-			sleep(0.5);
+			sleep(3);
 
 			/* Injuect MSI/MSIX Interrupt: Vector-0 */
 			doorball_msi_raise(broiler, &Broiler_pci_device, 0);
@@ -306,6 +307,7 @@ static int Broiler_pci_init(struct broiler *broiler)
 	DMA_MEMORY = malloc(DMA_MEMORY_LEN);
 	if (!DMA_MEMORY)
 		return -ENOMEM;
+	sprintf(DMA_MEMORY, "%s", Broiler_ID);
 
 	/* MSI */
 	doorball_msix_init(broiler, pdev);
