@@ -12,7 +12,7 @@
 ifeq ("$(origin TARGETA)", "command line")
 TARGET			:= $(TARGETA)
 else
-TARGET			:= BiscuitOS_Broiler
+TARGET			:= BiscuitOS-Broiler
 endif
 
 ## Source Code
