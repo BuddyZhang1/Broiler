@@ -14,7 +14,7 @@
 #include <assert.h>
 
 #define BISCUITOS_MMIO_BASE	0xF0000000
-#define BISCUITOS_MMIO_LEN	0x1000
+#define BISCUITOS_MMIO_LEN	0x4000
 
 /* BAR Space */
 static char BAR[BISCUITOS_MMIO_LEN];
