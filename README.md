@@ -5,11 +5,11 @@
 
 ![](https://s1.ax1x.com/2022/07/17/jIiwmF.png)
 
-Broiler an X86 emulator and virtualizer. Run BiscuitOS Distro for Mainstram Linux on X86 Architecture. Faster compilication speed, Lighter architecture, and Faster system running speed. The advantage lies in KVM and virtio/PIO/MMIO/Memory/Interrupt virtualize mechanism for Broiler. [Detail Chinese Documention](https://biscuitos.github.io/blog/Broiler/)
+Broiler an X86 emulator and virtualizer. Run BiscuitOS Distro for Mainstram Linux on X86 Architecture. Faster compilication speed, Lighter architecture, and Faster system running speed. The advantage lies in KVM and virtio/PIO/MMIO/Memory/Interrupt virtualize mechanism for Broiler. [Detail Chinese Documention](http://www.biscuitos.cn/blog/Broiler/)
 
 #### 1. How to use Broiler
 
-Broiler project support running on Ubuntu Distro or BiscuitOS, If you want running Linux Distro, you should download Kernel and Rootfs image file, but if you want run on BiscuitOS, only download BiscuitOS. But you need install KVM module on you system! [Detail Chinese usage](https://biscuitos.github.io/blog/Broiler/#B)
+Broiler project support running on Ubuntu Distro or BiscuitOS, If you want running Linux Distro, you should download Kernel and Rootfs image file, but if you want run on BiscuitOS, only download BiscuitOS. But you need install KVM module on you system! [Detail Chinese usage](http://www.biscuitos.cn/blog/Broiler/#B)
 
 ```
 ## On Ubuntu
